@@ -8,32 +8,29 @@
 
 ## 📁 配置文件
 
-### 1. 项目配置
-
-**文件：** `pyclaw/uv.toml`
-
-```toml
-[index]
-default = "tsinghua"
-
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-```
-
-### 2. 全局配置
+### 全局配置（推荐）
 
 **文件：** `~/.config/uv/uv.toml`
 
 ```toml
-[index]
-default = "tsinghua"
+# 镜像源配置（清华源）
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
+# 并发下载数
+concurrent-downloads = 10
+
+# 并发安装数
+concurrent-installs = 5
+```
+
+### 项目配置
+
+**文件：** `pyclaw/uv.toml`
+
+```toml
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+concurrent-downloads = 10
+concurrent-installs = 5
 ```
 
 ---
@@ -64,16 +61,6 @@ uv sync
 uv pip install -e .
 ```
 
-### 临时使用其他源
-
-```bash
-# 使用阿里云源
-uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-
-# 使用 PyPI 官方源
-uv pip install -r requirements.txt -i https://pypi.org/simple/
-```
-
 ### 查看当前配置
 
 ```bash
@@ -82,6 +69,16 @@ uv config --list
 
 # 查看当前使用的源
 uv pip config debug
+```
+
+### 临时使用其他源
+
+```bash
+# 使用阿里云源
+uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+
+# 使用 PyPI 官方源
+uv pip install -r requirements.txt -i https://pypi.org/simple/
 ```
 
 ---
@@ -93,26 +90,10 @@ uv pip config debug
 编辑 `~/.config/uv/uv.toml`：
 
 ```toml
-[index]
-default = "aliyun"  # 改为阿里云
-
-[[index]]
-name = "aliyun"
-url = "https://mirrors.aliyun.com/pypi/simple/"
-default = true
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
 ```
 
-### 方法二：使用命令行
-
-```bash
-# 设置默认源
-uv config --set default-index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 查看所有配置
-uv config --list
-```
-
-### 方法三：环境变量
+### 方法二：环境变量
 
 ```bash
 # 临时设置镜像源
@@ -156,7 +137,7 @@ ERROR: Failed to connect to pypi.tuna.tsinghua.edu.cn
 **解决方案：**
 ```bash
 # 切换到阿里云
-uv config --set default-index-url https://mirrors.aliyun.com/pypi/simple/
+export UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 
 # 或临时使用官方源
 uv pip install package -i https://pypi.org/simple/
@@ -179,22 +160,6 @@ uv cache clean
 uv sync --reinstall
 ```
 
-### 问题 3: 某些包找不到
-
-**症状：**
-```
-ERROR: No matching distribution found for package
-```
-
-**解决方案：**
-```bash
-# 尝试官方源
-uv pip install package -i https://pypi.org/simple/
-
-# 或检查包名是否正确
-uv pip search package  # 如果支持
-```
-
 ---
 
 ## 🎯 推荐配置
@@ -202,58 +167,25 @@ uv pip search package  # 如果支持
 ### 中国大陆用户
 
 ```toml
-[index]
-default = "tsinghua"
-
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-
-[[index]]
-name = "aliyun"
-url = "https://mirrors.aliyun.com/pypi/simple/"
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+concurrent-downloads = 10
+concurrent-installs = 5
 ```
 
 ### 海外用户
 
 ```toml
-[index]
-default = "pypi"
-
-[[index]]
-name = "pypi"
-url = "https://pypi.org/simple/"
-default = true
-```
-
-### 多地域备用
-
-```toml
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-
-[[index]]
-name = "aliyun"
-url = "https://mirrors.aliyun.com/pypi/simple/"
-
-[[index]]
-name = "pypi"
-url = "https://pypi.org/simple/"
+index-url = "https://pypi.org/simple/"
 ```
 
 ---
 
 ## 📋 检查清单
 
-- [x] 创建项目配置 `pyclaw/uv.toml`
 - [x] 创建全局配置 `~/.config/uv/uv.toml`
+- [x] 创建项目配置 `pyclaw/uv.toml`
 - [x] 设置清华源为默认
-- [x] 配置备用镜像源
 - [x] 优化并发设置
-- [x] 设置超时和重试
 
 ---
 

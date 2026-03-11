@@ -1,54 +1,11 @@
-# UV 配置文件
-# 使用国内镜像源加速下载
+# UV 项目配置文件
+# 使用清华镜像源加速下载
 
-# 全局镜像源配置
-[index]
-# 默认使用 PyPI 官方源
-default = "pypi"
-
-# 配置国内镜像源
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true  # 设置为默认源
-
-# 其他可选镜像源（注释备用）
-# [[index]]
-# name = "aliyun"
-# url = "https://mirrors.aliyun.com/pypi/simple/"
-
-# [[index]]
-# name = "ustc"
-# url = "https://mirrors.ustc.edu.cn/pypi/web/simple"
-
-# [[index]]
-# name = "pypi"
-# url = "https://pypi.org/simple/"
-
-# 安装策略
-[install]
-# 预编译二进制优先（加速安装）
-binary = true
-
-# 允许预编译 wheel
-only-binary = []
-
-# 不允许源码编译（除非必要）
-no-binary = []
+# 镜像源配置（清华源）
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
 # 并发下载数
 concurrent-downloads = 10
 
 # 并发安装数
 concurrent-installs = 5
-
-# 网络设置
-[network]
-# 超时时间（秒）
-timeout = 30
-
-# 重试次数
-retries = 3
-
-# 代理配置（如需要）
-# proxy = "http://proxy.example.com:8080"
