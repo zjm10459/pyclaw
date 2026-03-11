@@ -16,6 +16,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from collections import Counter
 from dataclasses import dataclass
+import numpy as np
 
 logger = logging.getLogger("pyclaw.advanced_retrieval")
 

@@ -52,6 +52,77 @@ class RAGMemoryConfig:
     vector_store_path: str = "~/.pyclaw/vector_store"
 
 
+class TextChunker:
+    """
+    文本分块器
+    
+    支持多种分块策略：
+    - 按段落分块（推荐）
+    - 固定大小分块
+    """
+    
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+        """
+        初始化分块器
+        
+        参数:
+            chunk_size: 分块大小（字符数）
+            chunk_overlap: 分块重叠（字符数）
+        """
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+    
+    def chunk_by_paragraph(self, text: str) -> List[str]:
+        """按段落分块"""
+        import re
+        
+        # 按双换行符分割段落
+        paragraphs = re.split(r'\n\s*\n', text)
+        
+        chunks = []
+        current_chunk = []
+        current_size = 0
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            para_size = len(para)
+            
+            if current_size + para_size > self.chunk_size:
+                # 当前块已满，保存并开始新块
+                if current_chunk:
+                    chunks.append('\n\n'.join(current_chunk))
+                current_chunk = [para]
+                current_size = para_size
+            else:
+                current_chunk.append(para)
+                current_size += para_size
+        
+        # 添加最后一个块
+        if current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+        
+        return chunks
+    
+    def chunk(self, text: str, strategy: str = "paragraph") -> List[str]:
+        """
+        分块
+        
+        参数:
+            text: 输入文本
+            strategy: 分块策略（paragraph | size）
+        
+        返回:
+            分块列表
+        """
+        if strategy == "paragraph":
+            return self.chunk_by_paragraph(text)
+        else:
+            return self.chunk_by_paragraph(text)  # 默认按段落
+
+
 @dataclass
 class MemoryChunk:
     """记忆分块"""
@@ -173,7 +244,7 @@ class RAGMemory:
     def _index_memory(self, content: str, source: str):
         """索引记忆文件"""
         import re
-        from .rag_memory import TextChunker
+        # TextChunker 已在本文件定义
         
         chunker = TextChunker(
             chunk_size=self.config.chunk_size,
@@ -277,7 +348,7 @@ class RAGMemory:
     def add_memory(self, content: str, category: str = "general", tags: Optional[List[str]] = None) -> str:
         """添加记忆"""
         import uuid
-        from .rag_memory import TextChunker
+        # TextChunker 已在本文件定义
         
         chunker = TextChunker(self.config.chunk_size, self.config.chunk_overlap)
         chunks = chunker.chunk(content, strategy="paragraph")
