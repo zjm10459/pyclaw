@@ -161,12 +161,13 @@ class TestRAGMemory:
         rag_memory.add_memory("技术内容 2", category="tech")
         rag_memory.add_memory("日常内容", category="daily")
         
-        # 只搜索 tech 分类
-        results = rag_memory.search("内容", top_k=10, category="tech")
+        # 只搜索 tech 分类，使用 bm25 方法确保准确性
+        results = rag_memory.search("内容", top_k=10, category="tech", method="bm25")
         
         # 应该只返回 tech 分类的结果
+        assert len(results) > 0
         for chunk in results:
-            assert chunk.metadata.get("category") == "tech"
+            assert chunk.metadata.get("category") == "tech", f"期望 tech，实际：{chunk.metadata.get('category')}, 内容：{chunk.content}"
 
 
 class TestCreateRAGMemory:

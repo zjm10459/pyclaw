@@ -37,6 +37,9 @@ class TestToolRegistry:
     
     def test_register_multiple_tools(self, tool_registry):
         """测试注册多个工具"""
+        # 记录初始工具数量（内置工具）
+        initial_count = len(tool_registry.tools)
+        
         def tool1(x: int) -> int:
             return x * 2
         
@@ -46,7 +49,8 @@ class TestToolRegistry:
         tool_registry.register_tool(tool1)
         tool_registry.register_tool(tool2)
         
-        assert len(tool_registry.tools) == 2
+        # 应该增加 2 个工具
+        assert len(tool_registry.tools) == initial_count + 2
     
     def test_get_tool(self, tool_registry):
         """测试获取工具"""
@@ -66,6 +70,9 @@ class TestToolRegistry:
     
     def test_list_tools(self, tool_registry):
         """测试列出工具"""
+        # 记录初始工具数量
+        initial_count = len(tool_registry.tools)
+        
         def tool1(x: int) -> int:
             return x
         
@@ -76,7 +83,8 @@ class TestToolRegistry:
         tool_registry.register_tool(tool2)
         
         tools = tool_registry.list_tools()
-        assert len(tools) == 2
+        # 应该返回所有工具（包括内置工具）
+        assert len(tools) == initial_count + 2
     
     def test_get_schema(self, tool_registry):
         """测试获取工具 Schema"""

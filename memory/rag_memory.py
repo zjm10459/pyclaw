@@ -423,7 +423,7 @@ class RAGMemory:
         method = method or self.config.retrieval_method
         
         if method == "bm25":
-            results = self._bm25_search(query, top_k)
+            results = self._bm25_search(query, top_k, category)
         elif method == "vector":
             results = self._vector_search(query, top_k, category)
         elif method == "hybrid":
@@ -442,20 +442,26 @@ class RAGMemory:
         logger.debug(f"搜索 '{query}': 返回 {len(results)} 个结果 (method={method})")
         return results
     
-    def _bm25_search(self, query: str, top_k: int) -> List[MemoryChunk]:
+    def _bm25_search(self, query: str, top_k: int, category: Optional[str] = None) -> List[MemoryChunk]:
         """BM25 检索"""
         if not self.bm25 or not self.documents:
             return []
         
-        results = self.bm25.search(query, top_k=top_k)
+        results = self.bm25.search(query, top_k=top_k * 2)  # 获取更多结果以便过滤
         
         chunks = []
         for doc_id, score in results:
             chunk_id = self.doc_id_map.get(doc_id)
             if chunk_id and chunk_id in self.chunks:
+                # 应用分类过滤
+                if category and self.chunks[chunk_id].metadata.get("category") != category:
+                    continue
                 chunk = self.chunks[chunk_id]
                 chunk.score = score
                 chunks.append(chunk)
+        
+        chunks.sort(key=lambda x: x.score, reverse=True)
+        return chunks[:top_k]
         
         return chunks
     
@@ -496,16 +502,35 @@ class RAGMemory:
         
         # BM25 检索
         bm25_results = self.bm25.search(query, top_k=top_k * 2)
-        bm25_scores = {self.doc_id_map.get(doc_id): score for doc_id, score in bm25_results}
+        bm25_scores = {}
+        for doc_id, score in bm25_results:
+            chunk_id = self.doc_id_map.get(doc_id)
+            if chunk_id:
+                # 应用分类过滤
+                if category and chunk_id in self.chunks:
+                    if self.chunks[chunk_id].metadata.get("category") != category:
+                        continue
+                bm25_scores[chunk_id] = score
         
         # 向量检索
         query_embedding = self._compute_embedding(query)
         if not query_embedding:
-            return self._bm25_search(query, top_k)
+            # 回退到 BM25
+            chunks = []
+            for chunk_id, score in bm25_scores.items():
+                if chunk_id in self.chunks:
+                    chunk = self.chunks[chunk_id].copy() if hasattr(self.chunks[chunk_id], 'copy') else self.chunks[chunk_id]
+                    chunk.score = score
+                    chunks.append(chunk)
+            chunks.sort(key=lambda x: x.score, reverse=True)
+            return chunks[:top_k]
         
         import numpy as np
         vector_scores = {}
         for chunk in self.chunks.values():
+            # 应用分类过滤
+            if category and chunk.metadata.get("category") != category:
+                continue
             if chunk.embedding is None:
                 continue
             similarity = self._cosine_similarity(query_embedding, chunk.embedding)
@@ -520,17 +545,20 @@ class RAGMemory:
         final_scores = []
         
         for chunk_id in all_ids:
-            if category and chunk_id in self.chunks:
-                if self.chunks[chunk_id].metadata.get("category") != category:
-                    continue
-            
             bm25_score = bm25_scores.get(chunk_id, 0.0)
             vector_score = vector_scores.get(chunk_id, 0.0)
             final_score = self.config.hybrid_alpha * bm25_score + (1 - self.config.hybrid_alpha) * vector_score
             
             if chunk_id in self.chunks:
-                self.chunks[chunk_id].score = final_score
-                final_scores.append(self.chunks[chunk_id])
+                # 创建副本以避免修改原始数据
+                chunk = MemoryChunk(
+                    id=self.chunks[chunk_id].id,
+                    content=self.chunks[chunk_id].content,
+                    embedding=self.chunks[chunk_id].embedding,
+                    metadata=self.chunks[chunk_id].metadata.copy(),
+                    score=final_score,
+                )
+                final_scores.append(chunk)
         
         final_scores.sort(key=lambda x: x.score, reverse=True)
         return final_scores[:top_k]

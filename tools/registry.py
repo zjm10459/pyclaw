@@ -314,6 +314,61 @@ class ToolRegistry:
         """
         return self.tools.get(name)
     
+    def register_tool(self, func: Callable, name: Optional[str] = None) -> None:
+        """
+        注册工具（兼容测试的别名方法）
+        
+        参数:
+            func: 工具函数
+            name: 工具名称（可选）
+        """
+        tool_name = name or func.__name__
+        
+        # 检查是否已有工具定义
+        if hasattr(func, '_tool_definition'):
+            tool_def = func._tool_definition
+            if name:
+                tool_def.name = name
+        else:
+            # 自动创建工具定义
+            tool_def = ToolDefinition(
+                name=tool_name,
+                description=(func.__doc__ or "").strip(),
+                function=func,
+                parameters=infer_parameters(func),
+            )
+        
+        self.tools[tool_name] = tool_def
+        logger.info(f"注册工具：{tool_name}")
+    
+    def get_tool(self, name: str) -> Optional[ToolDefinition]:
+        """
+        获取工具（兼容测试的别名方法）
+        
+        参数:
+            name: 工具名称
+        
+        返回:
+            工具定义或 None
+        """
+        return self.tools.get(name)
+    
+    def unregister_tool(self, name: str) -> bool:
+        """
+        注销工具
+        
+        参数:
+            name: 工具名称
+        
+        返回:
+            是否成功注销
+        """
+        if name in self.tools:
+            del self.tools[name]
+            logger.info(f"注销工具：{name}")
+            return True
+        return False
+    
     def list_tools(self) -> List[ToolDefinition]:
         """
         列出所有工具（返回 ToolDefinition 对象）
