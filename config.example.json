@@ -1,0 +1,70 @@
+{
+  "workspace": "~/.pyclaw/workspace",
+  
+  "agents": {
+    "defaults": {
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.7,
+      "max_tokens": 4096,
+      "max_iterations": 10,
+      "system_prompt": "你是一个有帮助的 AI 助手，使用中文回复。"
+    }
+  },
+  
+  "providers": {
+    "bailian": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "${DASHSCOPE_API_KEY}"
+    }
+  },
+  
+  "memory": {
+    "path": "~/.pyclaw/memory"
+  },
+  
+  "sessions": {
+    "isolation": "per-channel-peer"
+  },
+  
+  "heartbeat": {
+    "enable_email": false,
+    "enable_calendar": false,
+    "enable_weather": false,
+    "default_interval_minutes": 30
+  },
+  
+  "rag": {
+    "enable_vector_search": true,
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "top_k": 5,
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "vector_store": "memory",
+    
+    "retrieval_method": "hybrid",
+    "hybrid_alpha": 0.5,
+    "use_mmr": true,
+    "mmr_lambda": 0.5,
+    "use_rerank": false,
+    "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  },
+  
+  "channels": {
+    "feishu": {
+      "enabled": false,
+      "app_id": "",
+      "app_secret": "",
+      "verification_token": "",
+      "encrypt_key": "",
+      "host": "0.0.0.0",
+      "port": 18791
+    }
+  },
+  
+  "server": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "auth_token": ""
+  }
+}

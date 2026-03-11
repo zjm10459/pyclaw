@@ -1,0 +1,33 @@
+# PyClaw 开发依赖
+# ==================
+
+# 基础依赖（包含在 requirements.txt 中）
+-r requirements.txt
+
+# 测试
+pytest>=7.4.0
+pytest-cov>=4.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
+
+# 代码质量
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+isort>=5.12.0
+
+# 性能分析
+memory-profiler>=0.60.0
+line-profiler>=4.0.0
+
+# 文档
+sphinx>=7.0.0
+sphinx-rtd-theme>=1.0.0
+myst-parser>=2.0.0
+
+# 性能优化（可选）
+faiss-cpu>=1.7.4  # 向量检索加速
+orjson>=3.9.0     # 更快的 JSON 解析
+
+# 监控（可选）
+prometheus-client>=0.17.0

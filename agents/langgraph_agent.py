@@ -1,0 +1,735 @@
+#!/usr/bin/env python3
+"""
+基于 LangGraph 的 Agent 编排系统
+=================================
+
+使用 LangChain/LangGraph 最新版本 (2025-2026) 重新设计的 Agent 编排系统。
+
+核心架构：
+    用户消息 → Agent 决策 → 工具调用 → 结果处理 → 再次决策 → ... → 任务完成 → 回复用户
+
+特点：
+- 基于 LangGraph StateGraph 构建状态机
+- Agent 自主决定是否调用工具
+- 循环执行直到任务完成
+- 支持多轮工具调用
+- 持久化会话状态
+- 支持人工介入 (human-in-the-loop)
+
+参考：
+- LangGraph: https://python.langchain.com/docs/langgraph/
+- LangChain Agents: https://python.langchain.com/docs/langchain/agents/
+- Deep Agents: https://python.langchain.com/docs/deepagents/overview/
+"""
+
+import asyncio
+import logging
+from typing import Dict, Any, Optional, List, Literal, Annotated, TypedDict
+from dataclasses import dataclass, field
+from datetime import datetime
+import operator
+
+# LangChain Core 导入
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    ToolMessage,
+    BaseMessage,
+    messages_from_dict,
+    messages_to_dict,
+)
+from langchain_core.tools import StructuredTool, tool
+
+# LangGraph 导入
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import MessagesState
+
+# 本地导入
+from tools.registry import ToolRegistry
+
+logger = logging.getLogger("pyclaw.langgraph_agent")
+
+
+# ============================================================================
+# 状态定义
+# ============================================================================
+
+class AgentState(TypedDict):
+    """
+    LangGraph Agent 状态
+    
+    使用 TypedDict 定义，LangGraph 会自动管理消息累加。
+    
+    属性:
+        messages: 消息列表 (自动累加)
+        system_prompt: 系统提示词
+        max_iterations: 最大迭代次数
+        current_iteration: 当前迭代次数
+        task_complete: 任务是否完成
+    """
+    messages: Annotated[List[BaseMessage], add_messages]
+    system_prompt: str
+    max_iterations: int
+    current_iteration: int
+    task_complete: bool
+
+
+# ============================================================================
+# Agent 配置
+# ============================================================================
+
+@dataclass
+class LangGraphAgentConfig:
+    """
+    Agent 配置
+    
+    属性:
+        name: Agent 名称
+        model: 模型名称 (支持 "provider:model" 格式)
+        temperature: 温度参数
+        max_tokens: 最大输出 token 数
+        system_prompt: 系统提示词
+        max_iterations: 最大迭代次数 (防止无限循环)
+        interrupt_before_tools: 是否在工具执行前中断 (用于人工审核)
+    """
+    name: str = "assistant"
+    model: str = "qwen3.5-plus"
+    provider: str = "bailian"
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    system_prompt: str = "你是一个有帮助的 AI 助手。"
+    max_iterations: int = 10
+    interrupt_before_tools: bool = False  # 是否在工具执行前中断
+
+
+# ============================================================================
+# LangGraph Agent 主类
+# ============================================================================
+
+class LangGraphAgent:
+    """
+    基于 LangGraph 的 Agent 编排系统
+    
+    核心流程：
+        1. 接收用户消息
+        2. Agent 决定是否调用工具
+        3. 如果需要，执行工具
+        4. 返回 Agent 继续处理
+        5. 循环直到任务完成
+        6. 回复用户
+    
+    架构图:
+        START → agent_node → should_continue?
+                              ↓
+                         [需要工具] → tool_node → agent_node (循环)
+                              ↓
+                         [任务完成] → END
+    """
+    
+    def __init__(
+        self,
+        config: Optional[LangGraphAgentConfig] = None,
+        tool_registry: Optional[ToolRegistry] = None,
+        workspace_path: Optional[str] = None,
+        skill_loader: Optional[Any] = None,
+        rag_memory: Optional[Any] = None,
+    ):
+        """
+        初始化 LangGraph Agent
+        
+        参数:
+            config: Agent 配置
+            tool_registry: 工具注册表
+            workspace_path: 工作区路径 (用于加载人格记忆等文件)
+            skill_loader: 技能加载器 (用于注入技能说明)
+            rag_memory: RAG 记忆系统 (用于长期记忆检索)
+        """
+        self.config = config or LangGraphAgentConfig()
+        self.tool_registry = tool_registry or ToolRegistry()
+        self.workspace_path = workspace_path
+        self.skill_loader = skill_loader
+        self.rag_memory = rag_memory
+        
+        # LangChain 组件
+        self.llm = None
+        self.llm_with_tools = None
+        self.tools = []
+        
+        # LangGraph 组件
+        self.graph = None
+        self.memory = MemorySaver()  # 持久化记忆
+        
+        # 初始化
+        self._init_llm()
+        self._init_tools()
+        self._init_graph()
+        
+        logger.info(f"LangGraph Agent 初始化完成：{self.config.name}")
+        if self.skill_loader:
+            logger.info(f"技能加载器：已注入")
+        if self.rag_memory:
+            logger.info(f"RAG 记忆：已注入")
+    
+    def _init_llm(self):
+        """
+        初始化 LLM
+        
+        使用 LangChain 1.2+ 的 init_chat_model。
+        """
+        try:
+            from langchain.chat_models import init_chat_model
+            
+            # 构建模型标识符
+            model_identifier = f"{self.config.provider}:{self.config.model}"
+            
+            self.llm = init_chat_model(
+                model_identifier,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+            )
+            
+            logger.info(f"LLM 初始化成功：{model_identifier}")
+        
+        except Exception as e:
+            logger.warning(f"LLM 初始化失败 ({e})，尝试回退方案...")
+            self._init_llm_fallback()
+    
+    def _init_llm_fallback(self):
+        """LLM 初始化回退方案"""
+        try:
+            import os
+            
+            if self.config.provider == "bailian":
+                # 通义千问 (阿里云) - 使用 langchain_community
+                from langchain_community.chat_models import ChatOpenAI
+                self.llm = ChatOpenAI(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    openai_api_key=os.getenv("DASHSCOPE_API_KEY", "sk-default"),
+                )
+            elif self.config.provider == "openai":
+                # OpenAI
+                from langchain_community.chat_models import ChatOpenAI
+                self.llm = ChatOpenAI(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                )
+            else:
+                # 默认使用 langchain_community 的 ChatOpenAI
+                from langchain_community.chat_models import ChatOpenAI
+                self.llm = ChatOpenAI(
+                    model=self.config.model if ":" not in self.config.model else "gpt-4",
+                    temperature=self.config.temperature,
+                )
+            
+            logger.info(f"LLM 初始化成功 (回退模式): {self.config.provider}/{self.config.model}")
+        
+        except Exception as e:
+            logger.exception(f"LLM 初始化失败：{e}")
+            raise
+    
+    def _init_tools(self):
+        """
+        初始化工具
+        
+        将 PyClaw 工具转换为 LangChain StructuredTool 格式。
+        注意：工具注册表由 main.py 初始化，这里只做转换。
+        """
+        langchain_tools = []
+        
+        if not self.tool_registry or not self.tool_registry.tools:
+            logger.info("ℹ 未配置工具注册表，跳过工具初始化")
+            self.tools = []
+            return
+        
+        for tool_name, tool_def in self.tool_registry.tools.items():
+            try:
+                # 创建 LangChain StructuredTool
+                langchain_tool = StructuredTool(
+                    name=tool_def.name,
+                    description=tool_def.description,
+                    func=tool_def.function,
+                    args_schema=getattr(tool_def, 'schema', None),
+                )
+                langchain_tools.append(langchain_tool)
+                logger.debug(f"工具转换成功：{tool_name}")
+            except Exception as e:
+                logger.error(f"工具转换失败 {tool_name}: {e}")
+        
+        self.tools = langchain_tools
+        logger.info(f"✓ 工具初始化完成：{len(self.tools)} 个工具 (来自 tool_registry)")
+        
+        # 创建带工具的 LLM
+        if self.tools:
+            self.llm_with_tools = self.llm.bind_tools(self.tools)
+        
+        logger.info(f"工具初始化完成：{len(self.tools)} 个工具")
+    
+    def _init_graph(self):
+        """
+        初始化 LangGraph StateGraph
+        
+        构建 Agent 执行图:
+            START → agent_node → should_continue
+                                 ↓
+                          tools_node → agent_node (循环)
+                                 ↓
+                                END
+        """
+        try:
+            # 创建 StateGraph
+            builder = StateGraph(AgentState)
+            
+            # 添加节点
+            builder.add_node("agent", self._agent_node)
+            builder.add_node("tools", ToolNode(self.tools))
+            
+            # 设置入口
+            builder.add_edge(START, "agent")
+            
+            # 添加条件边 (决定是否调用工具)
+            builder.add_conditional_edges(
+                "agent",
+                self._should_continue,
+                {
+                    "continue": "tools",  # 需要调用工具
+                    "end": END,  # 任务完成
+                }
+            )
+            
+            # 工具执行后返回 agent 节点 (循环)
+            builder.add_edge("tools", "agent")
+            
+            # 编译图
+            interrupt_before = ["tools"] if self.config.interrupt_before_tools else None
+            self.graph = builder.compile(
+                checkpointer=self.memory,
+                interrupt_before=interrupt_before,
+            )
+            
+            logger.info("LangGraph StateGraph 初始化成功")
+        
+        except Exception as e:
+            logger.exception(f"LangGraph 初始化失败：{e}")
+            raise
+    
+    def _agent_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        Agent 节点：调用 LLM 决定是否调用工具
+        
+        参数:
+            state: 当前状态 (包含消息历史)
+        
+        返回:
+            更新后的状态
+        """
+        try:
+            # 检查迭代次数
+            if state["current_iteration"] >= state["max_iterations"]:
+                logger.warning(f"达到最大迭代次数 ({state['max_iterations']})，强制结束")
+                return {
+                    "messages": [
+                        AIMessage(content="已达到最大迭代次数，无法继续处理。")
+                    ],
+                    "task_complete": True,
+                }
+            
+            # 构建系统提示词（注入 RAG 记忆）
+            system_prompt = self._build_system_prompt_with_rag(state)
+            
+            # 准备消息
+            messages = [
+                SystemMessage(content=system_prompt),
+                *state["messages"]
+            ]
+            
+            # 调用 LLM (带工具)
+            if self.tools and self.llm_with_tools:
+                response = self.llm_with_tools.invoke(messages)
+            else:
+                response = self.llm.invoke(messages)
+            
+            # 更新迭代次数
+            new_iteration = state["current_iteration"] + 1
+            
+            # 检查是否有工具调用
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                logger.info(f"Agent 决定调用工具：{[tc['name'] for tc in response.tool_calls]}")
+                return {
+                    "messages": [response],
+                    "current_iteration": new_iteration,
+                    "task_complete": False,
+                }
+            else:
+                # 没有工具调用，任务完成
+                logger.info("Agent 完成任务，准备回复用户")
+                return {
+                    "messages": [response],
+                    "current_iteration": new_iteration,
+                    "task_complete": True,
+                }
+        
+        except Exception as e:
+            logger.exception(f"Agent 节点执行失败：{e}")
+            return {
+                "messages": [
+                    AIMessage(content=f"错误：{str(e)}")
+                ],
+                "task_complete": True,
+            }
+    
+    def _should_continue(self, state: AgentState) -> Literal["continue", "end"]:
+        """
+        判断是否继续执行 (调用工具还是结束)
+        
+        检查最后一条消息是否有工具调用。
+        
+        参数:
+            state: 当前状态
+        
+        返回:
+            "continue" 或 "end"
+        """
+        messages = state["messages"]
+        
+        if not messages:
+            return "end"
+        
+        last_message = messages[-1]
+        
+        # 如果是 AI 消息且有工具调用
+        if isinstance(last_message, AIMessage):
+            if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+                return "continue"
+        
+        # 如果任务已完成
+        if state.get("task_complete", False):
+            return "end"
+        
+        return "end"
+    
+    def _build_system_prompt(self, state: AgentState) -> str:
+        """
+        构建系统提示词 (注入工作区文件 + 技能说明)
+        
+        参数:
+            state: 当前状态
+        
+        返回:
+            系统提示词
+        """
+        from pathlib import Path
+        
+        base_prompt = self.config.system_prompt
+        
+        # 加载工作区文件
+        workspace_files = self._load_workspace_files()
+        
+        parts = [base_prompt]
+        
+        if workspace_files:
+            if "system_prompt" in workspace_files:
+                parts.append("\n\n## 人格记忆\n\n" + workspace_files["system_prompt"])
+            
+            if "user_context" in workspace_files:
+                parts.append("\n\n## 用户信息\n\n" + workspace_files["user_context"])
+            
+            if "workspace_context" in workspace_files:
+                parts.append("\n\n## 工作区说明\n\n" + workspace_files["workspace_context"])
+        
+        # 注入技能说明（SKILL.md instructions）
+        if self.skill_loader:
+            try:
+                skills_prompt = self.skill_loader.get_skills_prompt()
+                if skills_prompt:
+                    parts.append("\n\n## Available Skills\n\n" + skills_prompt)
+                    logger.debug(f"注入技能说明：{len(skills_prompt)} 字符")
+            except Exception as e:
+                logger.warning(f"获取技能说明失败：{e}")
+        
+        # 添加工具说明
+        if self.tools:
+            tools_info = "\n\n## 可用工具\n\n你可以使用以下工具来帮助用户：\n"
+            for tool in self.tools:
+                tools_info += f"- {tool.name}: {tool.description}\n"
+            parts.append(tools_info)
+        
+        return "\n".join(parts)
+    
+    def _build_system_prompt_with_rag(self, state: AgentState) -> str:
+        """
+        构建系统提示词（注入 RAG 记忆）
+        
+        参数:
+            state: 当前状态
+        
+        返回:
+            系统提示词（包含 RAG 检索的相关记忆）
+        """
+        # 基础系统提示词
+        base_prompt = self._build_system_prompt(state)
+        
+        # RAG 记忆检索
+        if self.rag_memory:
+            try:
+                # 从用户消息中提取查询关键词
+                user_message = ""
+                for msg in state["messages"]:
+                    if hasattr(msg, 'role') and msg.role == "user":
+                        user_message = msg.content
+                        break
+                
+                if user_message:
+                    # 检索相关记忆
+                    context = self.rag_memory.get_context(
+                        query=user_message,
+                        max_tokens=1000,
+                        top_k=5,
+                    )
+                    
+                    # 注入 RAG 上下文
+                    if context and "没有找到相关记忆" not in context:
+                        rag_section = "\n\n## 相关记忆 (RAG 检索)\n\n" + context
+                        return base_prompt + rag_section
+                
+            except Exception as e:
+                logger.warning(f"RAG 记忆检索失败：{e}")
+        
+        return base_prompt
+        
+        # 添加执行说明
+        parts.append("""
+## 执行流程
+
+1. 分析用户需求
+2. 如果需要，调用工具获取信息或执行操作
+3. 根据工具结果继续处理或再次调用工具
+4. 循环执行直到任务完成
+5. 回复用户
+
+注意：
+- 你可以多次调用工具
+- 每次调用工具后，你会看到工具的执行结果
+- 根据结果决定下一步行动
+- 当任务完成时，直接回复用户
+""")
+        
+        return "\n".join(parts)
+    
+    def _load_workspace_files(self) -> Dict[str, str]:
+        """加载工作区文件"""
+        from pathlib import Path
+        
+        workspace_files = {}
+        
+        if not self.workspace_path:
+            workspace_path = Path.home() / ".pyclaw" / "workspace"
+        else:
+            workspace_path = Path(self.workspace_path)
+        
+        # 必须加载的文件
+        required_files = [
+            ("人格记忆.md", "system_prompt"),
+            ("AGENT.md", "workspace_context"),
+            ("USER.md", "user_context"),
+        ]
+        
+        for filename, key in required_files:
+            filepath = workspace_path / filename
+            if filepath.exists():
+                try:
+                    content = filepath.read_text(encoding='utf-8')
+                    workspace_files[key] = content
+                except Exception as e:
+                    logger.warning(f"加载 {filename} 失败：{e}")
+        
+        return workspace_files
+    
+    async def run(
+        self,
+        input_text: str,
+        session_key: str = "default",
+        stream: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        运行 Agent
+        
+        参数:
+            input_text: 用户输入
+            session_key: 会话键 (用于隔离不同会话)
+            stream: 是否流式输出
+        
+        返回:
+            执行结果
+        """
+        logger.info(f"运行 Agent: {input_text[:50]}...")
+        
+        try:
+            # 准备初始状态
+            initial_state = AgentState(
+                messages=[HumanMessage(content=input_text)],
+                system_prompt=self.config.system_prompt,
+                max_iterations=self.config.max_iterations,
+                current_iteration=0,
+                task_complete=False,
+            )
+            
+            # 执行图
+            if stream:
+                return await self._run_stream(initial_state, session_key)
+            else:
+                return await self._run_normal(initial_state, session_key)
+        
+        except Exception as e:
+            logger.exception(f"Agent 执行失败：{e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    async def _run_normal(
+        self,
+        initial_state: AgentState,
+        session_key: str,
+    ) -> Dict[str, Any]:
+        """普通模式执行"""
+        loop = asyncio.get_event_loop()
+        
+        # 在线程池中执行
+        result = await loop.run_in_executor(
+            None,
+            lambda: list(self.graph.stream(
+                initial_state,
+                config={"configurable": {"thread_id": session_key}},
+            ))
+        )
+        
+        # 提取最终输出
+        all_messages = []
+        for step in result:
+            for node_name, node_output in step.items():
+                if "messages" in node_output:
+                    all_messages.extend(node_output["messages"])
+        
+        # 获取最后的 AI 回复
+        output = ""
+        tool_calls_count = 0
+        for msg in reversed(all_messages):
+            if isinstance(msg, AIMessage):
+                output = msg.content
+                break
+        
+        # 统计工具调用次数
+        for msg in all_messages:
+            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                tool_calls_count += len(msg.tool_calls)
+        
+        logger.info(f"Agent 执行完成：{len(output)} 字符，工具调用 {tool_calls_count} 次")
+        
+        return {
+            "success": True,
+            "output": output,
+            "session_key": session_key,
+            "tool_calls_count": tool_calls_count,
+            "full_messages": messages_to_dict(all_messages),
+            "iterations": len(result),
+        }
+    
+    async def _run_stream(
+        self,
+        initial_state: AgentState,
+        session_key: str,
+    ) -> Dict[str, Any]:
+        """流式模式执行"""
+        # TODO: 实现流式输出
+        return await self._run_normal(initial_state, session_key)
+
+
+# ============================================================================
+# 便捷函数
+# ============================================================================
+
+def create_langgraph_agent(
+    model: str = "qwen3.5-plus",
+    provider: str = "bailian",
+    tools: Optional[List] = None,
+    system_prompt: str = "你是一个有帮助的 AI 助手。",
+    max_iterations: int = 10,
+    workspace_path: Optional[str] = None,
+) -> LangGraphAgent:
+    """
+    创建 LangGraph Agent 的便捷函数
+    
+    参数:
+        model: 模型名称
+        provider: Provider 名称
+        tools: 工具列表
+        system_prompt: 系统提示词
+        max_iterations: 最大迭代次数
+        workspace_path: 工作区路径
+    
+    返回:
+        LangGraphAgent 实例
+    """
+    config = LangGraphAgentConfig(
+        model=model,
+        provider=provider,
+        system_prompt=system_prompt,
+        max_iterations=max_iterations,
+    )
+    
+    # 创建工具注册表
+    tool_registry = ToolRegistry()
+    if tools:
+        for tool in tools:
+            tool_registry.register_tool(tool)
+    
+    return LangGraphAgent(
+        config=config,
+        tool_registry=tool_registry,
+        workspace_path=workspace_path,
+    )
+
+
+# ============================================================================
+# 测试入口
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    
+    # 添加路径
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    # 设置日志
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    )
+    
+    # 创建 Agent
+    agent = create_langgraph_agent(
+        model="qwen3.5-plus",
+        provider="bailian",
+        system_prompt="你是一个有帮助的 AI 助手，使用中文回复。",
+        workspace_path=str(Path.home() / ".pyclaw" / "workspace"),
+    )
+    
+    # 测试运行
+    async def test():
+        result = await agent.run(
+            input_text="你好，请介绍一下你自己。",
+            session_key="test_session",
+        )
+        print(f"\n结果：{result['output']}\n")
+        print(f"工具调用次数：{result.get('tool_calls_count', 0)}")
+        print(f"迭代次数：{result.get('iterations', 0)}")
+    
+    asyncio.run(test())
