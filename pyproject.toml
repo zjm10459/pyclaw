@@ -7,7 +7,7 @@ name = "pyclaw"
 version = "2.0.0"
 description = "OpenClaw 的 Python 实现 - 基于 LangGraph 的多 Agent 协作系统"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "PyClaw Team", email = "pyclaw@example.com"}
 ]
@@ -27,7 +27,6 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -134,14 +133,13 @@ pyclaw = "pyclaw.cli:main"
 # example = "pyclaw.plugins.example:ExamplePlugin"
 
 [tool.setuptools]
-packages = ["pyclaw"]
+# 使用扁平结构，自动发现所有包
 include-package-data = true
 
-[tool.setuptools.package-data]
-pyclaw = ["*.md", "*.json", "*.yaml"]
-
-[tool.setuptools.exclude-package-data]
-pyclaw = ["tests/*", "*.pyc", "__pycache__/*"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agents*", "channels*", "config*", "gateway*", "memory*", "scheduler*", "sessions*", "skills*", "tests*", "tools*", "utils*"]
+exclude = ["__pycache__", "*.egg-info", ".venv", ".git"]
 
 # Black 配置
 [tool.black]
