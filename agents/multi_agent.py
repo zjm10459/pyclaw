@@ -424,7 +424,7 @@ class MultiAgentCollaboration:
     
     def _expert_node(self, state: MultiAgentState, role: AgentRole) -> Dict[str, Any]:
         """
-        专家节点：执行子任务
+        专家节点：执行子任务（同步版本）
         
         参数:
             state: 当前状态
@@ -450,7 +450,7 @@ class MultiAgentCollaboration:
             # 获取对应的 Agent
             try:
                 agent_role = AgentRole(subtask_role)
-            except:
+            except Exception:
                 agent_role = AgentRole.EXECUTOR
             
             if agent_role not in self.agents:
@@ -458,19 +458,34 @@ class MultiAgentCollaboration:
             
             expert = self.agents[agent_role]
             
-            # 执行子任务 (同步方式)
-            import concurrent.futures
-            loop = asyncio.get_event_loop()
+            # 执行子任务（使用嵌套事件循环）
+            import asyncio
             
-            def run_expert():
-                return asyncio.run(expert.run(
-                    input_text=subtask_description,
-                    session_key=f"subtask_{current_idx}",
-                ))
-            
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_expert)
-                result = await loop.run_in_executor(None, future.result)
+            try:
+                # 尝试在当前事件循环中运行
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # 如果事件循环正在运行，使用同步方式调用
+                    result = expert.run_sync(
+                        input_text=subtask_description,
+                        session_key=f"subtask_{current_idx}",
+                    )
+                else:
+                    # 否则使用 asyncio.run
+                    result = asyncio.run(
+                        expert.run(
+                            input_text=subtask_description,
+                            session_key=f"subtask_{current_idx}",
+                        )
+                    )
+            except RuntimeError:
+                # 没有事件循环，创建新的
+                result = asyncio.run(
+                    expert.run(
+                        input_text=subtask_description,
+                        session_key=f"subtask_{current_idx}",
+                    )
+                )
             
             # 更新状态
             agent_results = state.get("agent_results", {}).copy()

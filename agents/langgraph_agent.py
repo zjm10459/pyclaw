@@ -649,6 +649,30 @@ class LangGraphAgent:
         """流式模式执行"""
         # TODO: 实现流式输出
         return await self._run_normal(initial_state, session_key)
+    
+    def run_sync(
+        self,
+        input_text: str,
+        session_key: str = "default",
+        stream: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        同步版本 run 方法（用于在多 Agent 系统中调用）
+        
+        参数:
+            input_text: 用户输入
+            session_key: 会话键
+            stream: 是否流式输出
+        
+        返回:
+            执行结果
+        """
+        import asyncio
+        
+        # 使用 asyncio.run 在新的循环中运行
+        return asyncio.run(
+            self.run(input_text=input_text, session_key=session_key, stream=stream)
+        )
 
 
 # ============================================================================
