@@ -49,7 +49,8 @@ import platform
 from typing import Dict, Any, Optional, Set, Callable
 from dataclasses import dataclass
 import websockets
-from websockets.server import WebSocketServerProtocol
+from websockets.server import ServerProtocol
+from websockets.asyncio.server import ServerConnection
 
 from .protocol import (
     Protocol,
@@ -84,7 +85,7 @@ class ClientConnection:
         is_connected: 是否已完成 connect 握手
         last_activity: 最后活动时间
     """
-    websocket: WebSocketServerProtocol
+    websocket: ServerConnection
     device_id: Optional[str] = None
     is_authenticated: bool = False
     is_connected: bool = False
@@ -116,7 +117,7 @@ class GatewayServer:
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: int = 18790,  # 默认端口改为 18790
+        port: int = 18790,
         auth_token: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
         skill_loader: Any = None,
@@ -124,6 +125,7 @@ class GatewayServer:
         channels: Optional[Dict[str, Any]] = None,
         session_manager: Any = None,
         tool_registry: Any = None,
+        # LangGraph Agent 相关（由 main.py 注入）
         langgraph_agent: Any = None,
         multi_agent_system: Any = None,
         agent_mode: str = "langgraph",
@@ -163,7 +165,7 @@ class GatewayServer:
         self.agent_mode = agent_mode
         
         # 活跃客户端 {websocket: ClientConnection}
-        self.clients: Dict[WebSocketServerProtocol, ClientConnection] = {}
+        self.clients: Dict[ServerConnection, ClientConnection] = {}
         
         # 运行状态
         self.running = False
@@ -177,9 +179,10 @@ class GatewayServer:
         # 事件序列号（用于检测丢失）
         self.event_seq = 0
         
-        # AgentLoop 实例（延迟初始化）
-        self.agent_loop = None
-        self._init_agent_loop()
+        # LangGraph Agent 实例（由 main.py 注入）
+        self.langgraph_agent = None
+        self.multi_agent_system = None
+        self.agent_mode = "langgraph"  # langgraph | multi | simple
         
         # 请求处理器注册表
         self.request_handlers: Dict[str, Callable] = {
@@ -218,59 +221,21 @@ class GatewayServer:
         logger.info(f"Gateway 服务器初始化：{host}:{port}")
         logger.info(f"模块注入：技能={skill_loader is not None}, 记忆={memory is not None}, 渠道={len(channels)}, 会话={session_manager is not None}, 工具={tool_registry is not None}")
     
-    def _init_agent_loop(self):
+    def _init_agents(self):
         """
-        初始化 AgentLoop
+        初始化 Agent（LangGraph Agent / Multi-Agent）
         
-        从配置中加载 LLM Provider、模型设置和自定义 base_url。
+        注意：Agent 实例由 main.py 注入，这里只做验证
         """
-        try:
-            from agents.loop import AgentLoop, AgentConfig
-            
-            # 从配置中读取代理设置
-            agent_config = self.config.get("agents", {}).get("defaults", {})
-            
-            # 读取 Provider 配置（支持自定义 base_url）
-            provider_name = agent_config.get("provider", "bailian")
-            providers_config = self.config.get("providers", {}).get(provider_name, {})
-            
-            # 提取 base_url 和 api_key
-            base_url = providers_config.get("base_url", "")
-            api_key = providers_config.get("api_key", "")
-            
-            # 处理环境变量占位符（如 ${DASHSCOPE_API_KEY}）
-            if api_key.startswith("${") and api_key.endswith("}"):
-                env_var = api_key[2:-1]
-                api_key = os.environ.get(env_var, "")
-            
-            config = AgentConfig(
-                model=agent_config.get("model", "qwen-plus"),
-                provider=provider_name,
-                max_tokens=agent_config.get("max_tokens", 2048),
-                temperature=agent_config.get("temperature", 0.7),
-                base_url=base_url,  # 自定义 base_url
-                api_key=api_key,    # API Key（可选）
-                system_prompt=agent_config.get("system_prompt", "你是一个有帮助的 AI 助手。"),
-            )
-            
-            # 创建 AgentLoop 实例（注入所有模块）
-            self.agent_loop = AgentLoop(
-                config=config,
-                session_manager=self.session_manager,
-                skill_loader=self.skill_loader,      # 注入技能加载器
-                tool_registry=self.tool_registry,    # 注入工具注册表
-            )
-            
-            logger.info(f"✓ AgentLoop 已初始化：{config.provider}/{config.model}")
-            logger.info(f"  技能注入：{'✓' if self.skill_loader else '✗'}")
-            logger.info(f"  工具注入：{'✓' if self.tool_registry else '✗'}")
-            if config.base_url:
-                logger.info(f"  使用自定义 base_url: {config.base_url}")
-            
-        except Exception as e:
-            logger.warning(f"AgentLoop 初始化失败：{e}")
-            logger.warning("将使用模拟响应模式")
-            self.agent_loop = None
+        if self.langgraph_agent:
+            logger.info(f"✓ LangGraph Agent 已注入")
+        else:
+            logger.warning("⚠ LangGraph Agent 未注入，agent 请求将失败")
+        
+        if self.multi_agent_system:
+            logger.info(f"✓ 多 Agent 协作系统已注入")
+        
+        logger.info(f"Agent 模式：{self.agent_mode}")
     
     async def start(self):
         """
@@ -339,7 +304,7 @@ class GatewayServer:
         
         logger.info("Gateway 服务器已停止")
     
-    async def _handle_connection(self, websocket: WebSocketServerProtocol):
+    async def _handle_connection(self, websocket: ServerConnection):
         """
         处理客户端连接
         
@@ -475,7 +440,7 @@ class GatewayServer:
     
     async def _handle_connect(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -546,7 +511,7 @@ class GatewayServer:
     
     async def _handle_health(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -571,7 +536,7 @@ class GatewayServer:
     
     async def _handle_status(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -616,7 +581,7 @@ class GatewayServer:
     
     async def _handle_agent(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -685,27 +650,6 @@ class GatewayServer:
                     "iterations": result.get("iterations", 0),
                 })
             
-            elif self.agent_loop:
-                # 旧版 AgentLoop 模式（向后兼容）
-                tools_schema = request.params.get("tools", [])
-                
-                response = await self.agent_loop.run(
-                    messages=messages,
-                    session_key=session_key,
-                    tools_schema=tools_schema,
-                )
-                
-                run_id = f"run-{int(time.time())}"
-                
-                return Response.success(request.id, {
-                    "runId": run_id,
-                    "status": "completed",
-                    "sessionKey": session_key,
-                    "content": response.content,
-                    "usage": response.usage,
-                    "mode": "simple",
-                })
-            
             else:
                 return Response.failure(
                     request.id,
@@ -718,7 +662,7 @@ class GatewayServer:
     
     async def _handle_agent_wait(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -735,7 +679,7 @@ class GatewayServer:
     
     async def _handle_send(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -753,7 +697,7 @@ class GatewayServer:
     
     async def _handle_skills_list(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -778,7 +722,7 @@ class GatewayServer:
     
     async def _handle_skills_get(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -809,7 +753,7 @@ class GatewayServer:
     
     async def _handle_skills_invoke(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -848,7 +792,7 @@ class GatewayServer:
     
     async def _handle_memory_add(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -886,7 +830,7 @@ class GatewayServer:
     
     async def _handle_memory_search(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -931,7 +875,7 @@ class GatewayServer:
     
     async def _handle_memory_get(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -969,7 +913,7 @@ class GatewayServer:
     
     async def _handle_memory_delete(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1000,7 +944,7 @@ class GatewayServer:
     
     async def _handle_memory_stats(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1025,7 +969,7 @@ class GatewayServer:
     
     async def _handle_channels_list(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1056,7 +1000,7 @@ class GatewayServer:
     
     async def _handle_channels_send(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1109,7 +1053,7 @@ class GatewayServer:
     
     async def _handle_system_info(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1147,7 +1091,7 @@ class GatewayServer:
     
     async def _handle_sessions_list(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1172,7 +1116,7 @@ class GatewayServer:
     
     async def _handle_sessions_get(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1202,7 +1146,7 @@ class GatewayServer:
     
     async def _handle_sessions_delete(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1233,7 +1177,7 @@ class GatewayServer:
     
     async def _handle_sessions_stats(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1258,7 +1202,7 @@ class GatewayServer:
     
     async def _handle_tools_list(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1290,7 +1234,7 @@ class GatewayServer:
     
     async def _handle_tools_invoke(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1323,7 +1267,7 @@ class GatewayServer:
     
     async def _handle_tools_schema(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         request: Request,
         is_local: bool,
     ) -> Response:
@@ -1373,7 +1317,7 @@ class GatewayServer:
     
     async def send_event(
         self,
-        websocket: WebSocketServerProtocol,
+        websocket: ServerConnection,
         event: Event,
     ):
         """
