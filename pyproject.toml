@@ -81,6 +81,23 @@ channels = [
     "discord.py>=2.3.0",
 ]
 
+# Web 前端 (FastAPI 聊天监控系统)
+web = [
+    # FastAPI 框架
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "starlette>=0.35.0",
+    # 模板引擎
+    "jinja2>=3.1.0",
+    # 表单处理
+    "python-multipart>=0.0.6",
+    # WebSocket 客户端 (连接 Gateway)
+    "aiohttp>=3.9.0",
+    "websockets>=12.0",
+    # 配置
+    "python-dotenv>=1.0.0",
+]
+
 # 开发工具
 dev = [
     # 测试
@@ -110,7 +127,7 @@ dev = [
 
 # 完整安装（所有依赖）
 all = [
-    "pyclaw[performance,channels,dev]",
+    "pyclaw[performance,channels,web,dev]",
 ]
 
 [project.urls]
@@ -122,6 +139,7 @@ Changelog = "https://github.com/pyclaw/pyclaw/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pyclaw = "pyclaw.cli:main"
+pyclaw-web = "pyclaw_web.run:main"
 
 [project.entry-points."pyclaw.plugins"]
 # 预留插件入口点
@@ -133,7 +151,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agents*", "channels*", "config*", "gateway*", "memory*", "scheduler*", "sessions*", "skills*", "tests*", "tools*", "utils*"]
+include = ["agents*", "channels*", "config*", "gateway*", "memory*", "pyclaw_web*", "scheduler*", "sessions*", "skills*", "tests*", "tools*", "utils*"]
 exclude = ["__pycache__", "*.egg-info", ".venv", ".git"]
 
 # Black 配置
