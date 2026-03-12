@@ -209,8 +209,12 @@ class LangGraphAgent:
             provider_config = self._load_provider_config()
             
             if self.config.provider == "bailian":
-                # 通义千问 (阿里云) - 使用 langchain_community
-                from langchain_community.chat_models import ChatOpenAI
+                # 通义千问 (阿里云) - 使用 langchain-openai (推荐)
+                try:
+                    from langchain_openai import ChatOpenAI
+                except ImportError:
+                    logger.warning("langchain-openai 未安装，回退到 langchain_community")
+                    from langchain_community.chat_models import ChatOpenAI
                 
                 # 从配置文件或环境变量获取 API 配置
                 api_base = provider_config.get("bailian", {}).get("base_url", 
@@ -227,14 +231,18 @@ class LangGraphAgent:
                     model=self.config.model,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
-                    openai_api_base=api_base,
-                    openai_api_key=api_key,
+                    base_url=api_base,
+                    api_key=api_key,
                 )
                 logger.info(f"LLM 初始化成功 (通义千问): {self.config.model}")
             
             elif self.config.provider == "openai":
-                # OpenAI
-                from langchain_community.chat_models import ChatOpenAI
+                # OpenAI - 使用 langchain-openai (推荐)
+                try:
+                    from langchain_openai import ChatOpenAI
+                except ImportError:
+                    logger.warning("langchain-openai 未安装，回退到 langchain_community")
+                    from langchain_community.chat_models import ChatOpenAI
                 
                 api_base = provider_config.get("openai", {}).get("base_url", 
                             "https://api.openai.com/v1")
@@ -248,14 +256,18 @@ class LangGraphAgent:
                 self.llm = ChatOpenAI(
                     model=self.config.model,
                     temperature=self.config.temperature,
-                    openai_api_base=api_base,
-                    openai_api_key=api_key,
+                    base_url=api_base,
+                    api_key=api_key,
                 )
                 logger.info(f"LLM 初始化成功 (OpenAI): {self.config.model}")
             
             elif self.config.provider == "anthropic":
-                # Anthropic
-                from langchain_community.chat_models import ChatAnthropic
+                # Anthropic - 使用 langchain-anthropic (推荐)
+                try:
+                    from langchain_anthropic import ChatAnthropic
+                except ImportError:
+                    logger.warning("langchain-anthropic 未安装，回退到 langchain_community")
+                    from langchain_community.chat_models import ChatAnthropic
                 
                 api_key = provider_config.get("anthropic", {}).get("api_key", 
                             os.getenv("ANTHROPIC_API_KEY", ""))
@@ -273,14 +285,18 @@ class LangGraphAgent:
                 logger.info(f"LLM 初始化成功 (Anthropic): {self.config.model}")
             
             else:
-                # 默认使用 langchain_community 的 ChatOpenAI
-                from langchain_community.chat_models import ChatOpenAI
+                # 默认使用 langchain-openai 的 ChatOpenAI
+                try:
+                    from langchain_openai import ChatOpenAI
+                except ImportError:
+                    logger.warning("langchain-openai 未安装，回退到 langchain_community")
+                    from langchain_community.chat_models import ChatOpenAI
                 
                 api_key = os.getenv("OPENAI_API_KEY", "")
                 self.llm = ChatOpenAI(
                     model=self.config.model if ":" not in self.config.model else "gpt-4",
                     temperature=self.config.temperature,
-                    openai_api_key=api_key,
+                    api_key=api_key,
                 )
                 logger.info(f"LLM 初始化成功 (默认): {self.config.model}")
             
