@@ -92,6 +92,9 @@ class AgentDefinition:
         description: Agent 描述
         system_prompt: 系统提示词
         model: 模型名称
+        provider: LLM Provider 名称（如 bailian, openai, anthropic）
+        temperature: 温度参数
+        max_tokens: 最大输出 token 数
         max_iterations: 最大迭代次数
     """
     role: AgentRole
@@ -99,6 +102,9 @@ class AgentDefinition:
     description: str
     system_prompt: str
     model: str = "qwen3.5-plus"
+    provider: str = "bailian"
+    temperature: float = 0.7
+    max_tokens: int = 4096
     max_iterations: int = 10
 
 
@@ -121,7 +127,9 @@ DEFAULT_AGENTS = {
 - 如果需要汇总结果：{"action": "summarize", "results": {...}}
 - 如果直接回复：{"action": "reply", "content": "..."}
 """,
-        model="qwen3.5-plus",
+        model="qwen3.5-plus",  # 使用强大的模型进行决策
+        provider="bailian",
+        temperature=0.7,
         max_iterations=5,
     ),
     
@@ -136,7 +144,9 @@ DEFAULT_AGENTS = {
 
 你需要详细、准确地收集信息，并注明信息来源。
 """,
-        model="qwen3.5-plus",
+        model="qwen3.5-plus",  # 使用强大的模型进行研究
+        provider="bailian",
+        temperature=0.5,  # 较低温度，更准确
         max_iterations=10,
     ),
     
@@ -151,7 +161,9 @@ DEFAULT_AGENTS = {
 
 你需要编写清晰、高效、可维护的代码，并添加必要的注释。
 """,
-        model="qwen3.5-plus",
+        model="qwen2.5-coder-32b",  # 使用专门的代码模型
+        provider="bailian",
+        temperature=0.3,  # 低温度，代码更准确
         max_iterations=10,
     ),
     
@@ -166,7 +178,9 @@ DEFAULT_AGENTS = {
 
 你需要根据目标受众调整写作风格，确保内容质量。
 """,
-        model="qwen3.5-plus",
+        model="qwen3.5-plus",  # 使用强大的模型进行创作
+        provider="bailian",
+        temperature=0.8,  # 较高温度，更有创意
         max_iterations=8,
     ),
     
@@ -181,7 +195,9 @@ DEFAULT_AGENTS = {
 
 你需要用数据说话，提供有根据的分析和建议。
 """,
-        model="qwen3.5-plus",
+        model="qwen3.5-plus",  # 使用强大的模型进行分析
+        provider="bailian",
+        temperature=0.5,  # 较低温度，更理性
         max_iterations=10,
     ),
     
@@ -196,7 +212,9 @@ DEFAULT_AGENTS = {
 
 你需要准确执行任务，并及时反馈进度和结果。
 """,
-        model="qwen3.5-plus",
+        model="qwen3-turbo",  # 使用快速模型执行简单任务
+        provider="bailian",
+        temperature=0.7,
         max_iterations=10,
     ),
 }
@@ -224,6 +242,7 @@ class MultiAgentCollaboration:
         agent_definitions: Optional[Dict[AgentRole, AgentDefinition]] = None,
         tool_registry: Optional[Any] = None,
         workspace_path: Optional[str] = None,
+        config_path: Optional[str] = None,
     ):
         """
         初始化多 Agent 协作系统
@@ -232,8 +251,19 @@ class MultiAgentCollaboration:
             agent_definitions: Agent 定义字典
             tool_registry: 工具注册表
             workspace_path: 工作区路径
+            config_path: 配置文件路径（可选，用于覆盖默认 Agent 配置）
         """
-        self.agent_definitions = agent_definitions or DEFAULT_AGENTS
+        # 加载默认配置
+        self.agent_definitions = DEFAULT_AGENTS.copy()
+        
+        # 如果提供了自定义配置，合并
+        if agent_definitions:
+            self.agent_definitions.update(agent_definitions)
+        
+        # 从配置文件加载配置（如果提供）
+        if config_path:
+            self._load_config_from_file(config_path)
+        
         self.tool_registry = tool_registry
         self.workspace_path = workspace_path
         
@@ -249,6 +279,71 @@ class MultiAgentCollaboration:
         
         logger.info(f"多 Agent 协作系统初始化完成：{len(self.agents)} 个 Agent")
     
+    def _load_config_from_file(self, config_path: str):
+        """
+        从配置文件加载 Agent 配置
+        
+        参数:
+            config_path: 配置文件路径（JSON 格式）
+        
+        配置文件格式示例：
+        {
+            "agents": {
+                "supervisor": {
+                    "model": "qwen3.5-plus",
+                    "provider": "bailian",
+                    "temperature": 0.7,
+                    "max_tokens": 4096
+                },
+                "coder": {
+                    "model": "qwen2.5-coder-32b",
+                    "provider": "bailian",
+                    "temperature": 0.3
+                }
+            }
+        }
+        """
+        import json
+        from pathlib import Path
+        
+        config_file = Path(config_path)
+        if not config_file.exists():
+            logger.warning(f"配置文件不存在：{config_path}")
+            return
+        
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            agents_config = config.get("agents", {})
+            
+            for role_str, agent_cfg in agents_config.items():
+                try:
+                    role = AgentRole(role_str)
+                    if role in self.agent_definitions:
+                        # 更新现有配置
+                        existing = self.agent_definitions[role]
+                        updated = AgentDefinition(
+                            role=role,
+                            name=existing.name,
+                            description=existing.description,
+                            system_prompt=existing.system_prompt,
+                            model=agent_cfg.get("model", existing.model),
+                            provider=agent_cfg.get("provider", existing.provider),
+                            temperature=agent_cfg.get("temperature", existing.temperature),
+                            max_tokens=agent_cfg.get("max_tokens", existing.max_tokens),
+                            max_iterations=agent_cfg.get("max_iterations", existing.max_iterations),
+                        )
+                        self.agent_definitions[role] = updated
+                        logger.info(f"从配置文件加载 Agent: {role.value} -> {agent_cfg.get('model', existing.model)}")
+                except ValueError:
+                    logger.warning(f"未知的 Agent 角色：{role_str}")
+            
+            logger.info(f"从配置文件加载完成：{len(agents_config)} 个 Agent 配置")
+        
+        except Exception as e:
+            logger.error(f"加载配置文件失败：{e}")
+    
     def _init_agents(self):
         """初始化所有 Agent 实例"""
         for role, definition in self.agent_definitions.items():
@@ -256,7 +351,9 @@ class MultiAgentCollaboration:
                 config = LangGraphAgentConfig(
                     name=definition.name,
                     model=definition.model,
-                    provider="bailian",  # 默认使用通义千问
+                    provider=definition.provider,
+                    temperature=definition.temperature,
+                    max_tokens=definition.max_tokens,
                     system_prompt=definition.system_prompt,
                     max_iterations=definition.max_iterations,
                 )
@@ -268,7 +365,7 @@ class MultiAgentCollaboration:
                 )
                 
                 self.agents[role] = agent
-                logger.debug(f"Agent 初始化成功：{role.value}")
+                logger.info(f"Agent 初始化成功：{role.value} (模型：{definition.provider}/{definition.model})")
             
             except Exception as e:
                 logger.error(f"Agent 初始化失败 {role.value}: {e}")

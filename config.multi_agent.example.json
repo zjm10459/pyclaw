@@ -1,0 +1,75 @@
+{
+  "_comment": "多 Agent 系统配置文件示例",
+  "_description": "为每个 Agent 配置独立的大模型和参数",
+  
+  "agents": {
+    "supervisor": {
+      "_comment": "主管 Agent - 使用强大的模型进行决策和协调",
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.7,
+      "max_tokens": 4096,
+      "max_iterations": 5
+    },
+    
+    "researcher": {
+      "_comment": "研究员 Agent - 使用强大的模型进行研究，较低温度保证准确性",
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.5,
+      "max_tokens": 4096,
+      "max_iterations": 10
+    },
+    
+    "coder": {
+      "_comment": "程序员 Agent - 使用专门的代码模型，低温度保证代码准确性",
+      "model": "qwen2.5-coder-32b",
+      "provider": "bailian",
+      "temperature": 0.3,
+      "max_tokens": 4096,
+      "max_iterations": 10
+    },
+    
+    "writer": {
+      "_comment": "作家 Agent - 使用强大的模型进行创作，较高温度更有创意",
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.8,
+      "max_tokens": 4096,
+      "max_iterations": 8
+    },
+    
+    "analyst": {
+      "_comment": "分析师 Agent - 使用强大的模型进行分析，较低温度更理性",
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.5,
+      "max_tokens": 4096,
+      "max_iterations": 10
+    },
+    
+    "executor": {
+      "_comment": "执行者 Agent - 使用快速模型执行简单任务，平衡速度和成本",
+      "model": "qwen3-turbo",
+      "provider": "bailian",
+      "temperature": 0.7,
+      "max_tokens": 2048,
+      "max_iterations": 10
+    }
+  },
+  
+  "providers": {
+    "_comment": "Provider 配置（可选，如果不在主 config.json 中配置）",
+    "bailian": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "${DASHSCOPE_API_KEY}"
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "${OPENAI_API_KEY}"
+    },
+    "anthropic": {
+      "api_key": "${ANTHROPIC_API_KEY}"
+    }
+  }
+}
