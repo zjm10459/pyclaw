@@ -46,6 +46,7 @@ import time
 import logging
 import os
 import platform
+from pathlib import Path
 from typing import Dict, Any, Optional, Set, Callable
 from dataclasses import dataclass
 import websockets
@@ -183,6 +184,7 @@ class GatewayServer:
         self.langgraph_agent = None
         self.multi_agent_system = None
         self.agent_mode = "langgraph"  # langgraph | multi | simple
+        self.agent_loop = None  # Agent 循环（兼容旧代码）
         
         # 请求处理器注册表
         self.request_handlers: Dict[str, Callable] = {
