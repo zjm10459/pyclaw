@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🦮 PyClaw Web</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">首页</a>
+            <a href="/chat" class="nav-link active">聊天</a>
+            <a href="/sessions" class="nav-link">会话</a>
+            <a href="/tools" class="nav-link">工具</a>
+            <a href="/config" class="nav-link">配置</a>
+        </div>
+    </nav>
+
+    <main class="container chat-container">
+        <div class="chat-header">
+            <h2>💬 智能对话</h2>
+            <div class="connection-status">
+                <span id="ws-status" class="status-dot disconnected"></span>
+                <span id="ws-text">未连接</span>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            <div class="message system">
+                <div class="message-content">
+                    欢迎使用 PyClaw 聊天！连接到 Gateway 后开始对话。
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <textarea 
+                id="message-input" 
+                placeholder="输入消息... (Shift+Enter 换行)"
+                rows="3"
+            ></textarea>
+            <button id="send-btn" class="btn btn-primary" disabled>发送</button>
+        </div>
+
+        <div class="chat-settings">
+            <label>
+                <input type="checkbox" id="auto-scroll" checked>
+                自动滚动
+            </label>
+            <label>
+                <input type="checkbox" id="show-timestamp" checked>
+                显示时间戳
+            </label>
+            <button id="clear-chat" class="btn btn-secondary">清空对话</button>
+        </div>
+    </main>
+
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>

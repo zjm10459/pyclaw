@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🦮 PyClaw Web</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">首页</a>
+            <a href="/chat" class="nav-link">聊天</a>
+            <a href="/sessions" class="nav-link">会话</a>
+            <a href="/tools" class="nav-link active">工具</a>
+            <a href="/config" class="nav-link">配置</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h2>🛠️ 可用工具</h2>
+            <button id="refresh-tools" class="btn btn-primary">刷新列表</button>
+        </div>
+
+        <div class="tools-grid" id="tools-list">
+            <div class="loading">加载中...</div>
+        </div>
+    </main>
+
+    <script>
+        async function loadTools() {
+            const listEl = document.getElementById('tools-list');
+            
+            const tools = [
+                {
+                    name: "read_file",
+                    description: "读取文件内容",
+                    category: "文件操作"
+                },
+                {
+                    name: "write_file",
+                    description: "写入文件内容",
+                    category: "文件操作"
+                },
+                {
+                    name: "web_search",
+                    description: "搜索网络",
+                    category: "Web 工具"
+                },
+                {
+                    name: "web_fetch",
+                    description: "抓取网页内容",
+                    category: "Web 工具"
+                },
+                {
+                    name: "echo",
+                    description: "回显消息（测试工具）",
+                    category: "系统工具"
+                },
+                {
+                    name: "get_time",
+                    description: "获取当前时间",
+                    category: "系统工具"
+                }
+            ];
+
+            listEl.innerHTML = tools.map(tool => `
+                <div class="tool-card">
+                    <h3>${tool.name}</h3>
+                    <p class="tool-desc">${tool.description}</p>
+                    <span class="tool-category">${tool.category}</span>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('refresh-tools').addEventListener('click', loadTools);
+        loadTools();
+    </script>
+</body>
+</html>

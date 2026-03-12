@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🦮 PyClaw Web</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">首页</a>
+            <a href="/chat" class="nav-link">聊天</a>
+            <a href="/sessions" class="nav-link active">会话</a>
+            <a href="/tools" class="nav-link">工具</a>
+            <a href="/config" class="nav-link">配置</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h2>📋 会话管理</h2>
+            <button id="refresh-sessions" class="btn btn-primary">刷新列表</button>
+        </div>
+
+        <div class="sessions-list" id="sessions-list">
+            <div class="loading">加载中...</div>
+        </div>
+    </main>
+
+    <script>
+        async function loadSessions() {
+            const listEl = document.getElementById('sessions-list');
+            listEl.innerHTML = '<div class="loading">加载中...</div>';
+            
+            try {
+                // TODO: 通过 WebSocket 获取会话列表
+                listEl.innerHTML = `
+                    <div class="session-item">
+                        <div class="session-info">
+                            <h3>agent:main:feishu-ou_xxx</h3>
+                            <p>消息数：10 | 创建时间：2026-03-10 11:00</p>
+                        </div>
+                        <div class="session-actions">
+                            <button class="btn btn-secondary">查看</button>
+                            <button class="btn btn-danger">删除</button>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                listEl.innerHTML = `<div class="error">加载失败：${error.message}</div>`;
+            }
+        }
+
+        document.getElementById('refresh-sessions').addEventListener('click', loadSessions);
+        loadSessions();
+    </script>
+</body>
+</html>

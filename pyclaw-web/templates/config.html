@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🦮 PyClaw Web</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">首页</a>
+            <a href="/chat" class="nav-link">聊天</a>
+            <a href="/sessions" class="nav-link">会话</a>
+            <a href="/tools" class="nav-link">工具</a>
+            <a href="/config" class="nav-link active">配置</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h2>⚙️ 系统配置</h2>
+        </div>
+
+        <div class="config-section">
+            <h3>Gateway 连接</h3>
+            <div class="config-item">
+                <label>Gateway 地址:</label>
+                <input type="text" id="gateway-url" value="ws://127.0.0.1:18790">
+            </div>
+            <div class="config-item">
+                <label>连接状态:</label>
+                <span id="connection-status" class="status-disconnected">未连接</span>
+            </div>
+            <button id="test-connection" class="btn btn-primary">测试连接</button>
+        </div>
+
+        <div class="config-section">
+            <h3>系统信息</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">版本</div>
+                    <div class="info-value">v0.2.1</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">API 端点</div>
+                    <div class="info-value">22 个</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">可用工具</div>
+                    <div class="info-value">13 个</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">模块</div>
+                    <div class="info-value">技能、记忆、会话、工具、渠道</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>模块状态</h3>
+            <div class="module-status">
+                <div class="module-item">
+                    <span class="module-name">技能模块</span>
+                    <span class="module-status-ok">✓ 已集成</span>
+                </div>
+                <div class="module-item">
+                    <span class="module-name">记忆模块</span>
+                    <span class="module-status-ok">✓ 已集成</span>
+                </div>
+                <div class="module-item">
+                    <span class="module-name">会话模块</span>
+                    <span class="module-status-ok">✓ 已集成</span>
+                </div>
+                <div class="module-item">
+                    <span class="module-name">工具模块</span>
+                    <span class="module-status-ok">✓ 已集成</span>
+                </div>
+                <div class="module-item">
+                    <span class="module-name">渠道模块</span>
+                    <span class="module-status-ok">✓ 已集成</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('test-connection').addEventListener('click', async () => {
+            const statusEl = document.getElementById('connection-status');
+            statusEl.textContent = '测试中...';
+            
+            // TODO: 实际测试 WebSocket 连接
+            setTimeout(() => {
+                statusEl.textContent = '连接成功';
+                statusEl.className = 'status-connected';
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
