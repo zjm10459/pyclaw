@@ -186,6 +186,7 @@ class GatewayServer:
         # 请求处理器注册表
         self.request_handlers: Dict[str, Callable] = {
             "connect": self._handle_connect,
+            "heartbeat": self._handle_heartbeat,
             "health": self._handle_health,
             "status": self._handle_status,
             "agent": self._handle_agent,
@@ -437,6 +438,23 @@ class GatewayServer:
                 logger.exception(f"请求处理错误：{e}")
                 response = Response.failure("unknown", str(e))
                 await connection.websocket.send(format_message(response))
+    
+    async def _handle_heartbeat(
+        self,
+        websocket: ServerConnection,
+        request: Request,
+        is_local: bool,
+    ) -> Response:
+        """
+        处理心跳请求
+        
+        保持连接活跃，检测连接状态。
+        """
+        logger.debug(f"心跳：{request.id}")
+        return Response.success(request.id, {
+            "status": "ok",
+            "timestamp": time.time(),
+        })
     
     async def _handle_connect(
         self,

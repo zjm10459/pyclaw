@@ -404,6 +404,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
             logger.debug(f"收到客户端消息：{data}")
             
+            # 处理心跳
+            if data.get("type") == "heartbeat":
+                await websocket.send_json({
+                    "type": "heartbeat",
+                    "timestamp": datetime.now().isoformat(),
+                })
+                continue
+            
             message = data.get("message", "")
             mode = data.get("mode", "single")
             
