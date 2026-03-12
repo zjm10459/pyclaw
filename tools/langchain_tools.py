@@ -44,11 +44,17 @@ def get_langchain_tools() -> List[Any]:
     # 2. Fetch 工具（网页抓取）
     try:
         from langchain_community.tools.requests.tool import RequestsGetTool
-        fetch_tool = RequestsGetTool()
+        from langchain_community.utilities.requests import GenericRequestsWrapper
+        
+        # 创建 requests wrapper
+        wrapper = GenericRequestsWrapper()
+        
+        # 创建工具时设置 allow_dangerous_requests=True 以允许 HTTP 请求
+        fetch_tool = RequestsGetTool(requests_wrapper=wrapper, allow_dangerous_requests=True)
         tools.append(fetch_tool)
         logger.info("✓ Fetch 工具已加载")
-    except ImportError:
-        logger.warning("⚠ RequestsGetTool 未安装，跳过")
+    except ImportError as e:
+        logger.warning(f"⚠ RequestsGetTool 未安装，跳过：{e}")
     except Exception as e:
         logger.error(f"✗ Fetch 工具加载失败：{e}")
     
@@ -158,7 +164,13 @@ def load_fetch_tool():
     """加载 Fetch 工具"""
     try:
         from langchain_community.tools.requests.tool import RequestsGetTool
-        return RequestsGetTool()
+        from langchain_community.utilities.requests import GenericRequestsWrapper
+        
+        # 创建 requests wrapper
+        wrapper = GenericRequestsWrapper()
+        
+        # 创建工具时设置 allow_dangerous_requests=True 以允许 HTTP 请求
+        return RequestsGetTool(requests_wrapper=wrapper, allow_dangerous_requests=True)
     except ImportError:
         logger.warning("RequestsGetTool 未安装")
         return None
