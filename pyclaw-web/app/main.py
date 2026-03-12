@@ -402,14 +402,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         while True:
             # 接收客户端消息
             data = await websocket.receive_json()
+            logger.debug(f"收到客户端消息：{data}")
+            
             message = data.get("message", "")
             mode = data.get("mode", "single")
             
             if not message:
+                logger.warning("消息为空，跳过")
                 continue
             
             # 添加用户消息到历史
             session_manager.add_message(session_id, "user", message)
+            logger.info(f"发送消息到 Gateway: session={session_id}, message={message[:50]}...")
             
             # 发送到 Gateway
             try:
@@ -418,6 +422,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     message=message,
                     mode=mode,
                 )
+                
+                logger.debug(f"Gateway 响应：{response}")
                 
                 # 转发响应给客户端
                 await websocket.send_json({
@@ -434,6 +440,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         ai_message,
                         metadata=response,
                     )
+                else:
+                    logger.error(f"Gateway 返回失败：{response.get('error')}")
             
             except Exception as e:
                 logger.error(f"Gateway 通信失败：{e}")

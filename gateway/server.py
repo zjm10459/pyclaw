@@ -688,12 +688,51 @@ class GatewayServer:
         """
         处理发送消息请求
         
-        TODO: 实现消息发送
+        调用 LangGraph Agent 或多 Agent 系统处理用户消息。
         """
-        return Response.success(request.id, {
-            "status": "sent",
-            "messageId": f"msg-{int(time.time())}",
-        })
+        try:
+            # 获取参数
+            session_key = request.params.get("sessionKey", "default")
+            message = request.params.get("message", "")
+            mode = request.params.get("mode", "single")
+            
+            if not message:
+                return Response.failure(request.id, "消息内容为空")
+            
+            logger.info(f"处理发送消息：session={session_key}, mode={mode}, message={message[:50]}...")
+            
+            # 根据模式选择 Agent
+            if mode == "multi" and self.multi_agent_system:
+                # 多 Agent 模式
+                logger.info("使用多 Agent 协作系统")
+                result = await self.multi_agent_system.run(
+                    task=message,
+                    session_key=session_key,
+                )
+            elif self.langgraph_agent:
+                # 单 Agent 模式
+                logger.info("使用 LangGraph Agent")
+                result = await self.langgraph_agent.run(
+                    input_text=message,
+                    session_key=session_key,
+                )
+            else:
+                return Response.failure(request.id, "Agent 未初始化")
+            
+            # 返回结果
+            if result.get("success"):
+                return Response.success(request.id, {
+                    "output": result.get("output", ""),
+                    "session_id": session_key,
+                    "tool_calls_count": result.get("tool_calls_count", 0),
+                    "iterations": result.get("iterations", 0),
+                })
+            else:
+                return Response.failure(request.id, result.get("error", "未知错误"))
+        
+        except Exception as e:
+            logger.exception(f"处理发送消息失败：{e}")
+            return Response.failure(request.id, f"处理失败：{str(e)}")
     
     # ========== 技能相关处理器 ==========
     
