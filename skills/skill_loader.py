@@ -430,24 +430,55 @@ class SkillLoader:
             return skill.instructions  # 首次访问时自动加载
         return None
     
-    def get_skills_prompt(self) -> str:
+    def get_skills_prompt(self, include_full_instructions: bool = False) -> str:
         """
         生成技能提示词（惰性加载）
         
         只在需要时才读取文件内容。
         
+        参数:
+            include_full_instructions: 是否包含完整指令（默认 False，只返回元数据）
+        
         返回:
-            所有技能的指令文本
+            技能提示词（元数据或完整指令）
         """
         prompts = []
         
         for skill in self.list_skills():
             if not skill.metadata.disable_model_invocation:
-                instructions = skill.instructions  # 惰性加载
-                if instructions:
-                    prompts.append(f"# {skill.name}\n\n{instructions}\n")
+                if include_full_instructions:
+                    # 包含完整指令（旧行为）
+                    instructions = skill.instructions  # 惰性加载
+                    if instructions:
+                        prompts.append(f"# {skill.name}\n\n{instructions}\n")
+                else:
+                    # 只包含元数据（新行为，节省 token）
+                    skill_info = f"## {skill.name}"
+                    if skill.metadata.emoji:
+                        skill_info = f"{skill.metadata.emoji} {skill.name}"
+                    
+                    if skill.metadata.description:
+                        skill_info += f"\n- {skill.metadata.description}"
+                    
+                    if skill.metadata.homepage:
+                        skill_info += f"\n- 主页：{skill.metadata.homepage}"
+                    
+                    # 添加 gating 信息
+                    if skill.metadata.requires:
+                        requires = skill.metadata.requires
+                        if requires.get("os"):
+                            skill_info += f"\n- 支持系统：{', '.join(requires['os'])}"
+                        if requires.get("bins"):
+                            skill_info += f"\n- 需要：{', '.join(requires['bins'])}"
+                        if requires.get("env"):
+                            skill_info += f"\n- 环境变量：{', '.join(requires['env'])}"
+                    
+                    prompts.append(skill_info)
         
-        return "\n---\n\n".join(prompts)
+        if include_full_instructions:
+            return "\n---\n\n".join(prompts)
+        else:
+            return "\n\n".join(prompts)
     
     def reload(self):
         """重新加载技能"""
