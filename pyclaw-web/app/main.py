@@ -17,6 +17,7 @@ import os
 import json
 import asyncio
 import logging
+import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -183,13 +184,16 @@ class PyClawGatewayClient:
         if not self.ws:
             await self.connect()
         
-        # 构建请求
+        # 构建请求（使用 Gateway 协议格式）
         request = {
-            "type": "chat",
-            "session_id": session_id,
-            "message": message,
-            "mode": mode,
-            "timestamp": datetime.now().isoformat(),
+            "type": "req",
+            "id": str(uuid.uuid4()),
+            "method": "send",
+            "params": {
+                "sessionKey": session_id,
+                "message": message,
+                "mode": mode,
+            },
         }
         
         # 发送
@@ -199,6 +203,20 @@ class PyClawGatewayClient:
         # 等待响应
         try:
             response = await asyncio.wait_for(self.ws.receive_json(), timeout=120.0)
+            # 解析响应
+            if response.get("type") == "res":
+                if response.get("ok"):
+                    return {
+                        "success": True,
+                        "output": response.get("payload", {}).get("output", ""),
+                        "session_id": session_id,
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": response.get("error", "未知错误"),
+                        "session_id": session_id,
+                    }
             return response
         except asyncio.TimeoutError:
             return {
