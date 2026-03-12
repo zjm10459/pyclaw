@@ -604,6 +604,35 @@
             }
         }
         
+        // WebSocket 心跳定时器
+        let heartbeatTimer = null;
+        
+        // 发送心跳
+        function sendHeartbeat() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'heartbeat',
+                    timestamp: Date.now()
+                }));
+                console.log('❤️ 发送心跳');
+            }
+        }
+        
+        // 开始心跳
+        function startHeartbeat() {
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            heartbeatTimer = setInterval(sendHeartbeat, 30000); // 30 秒一次
+            console.log('💓 开始心跳 (30 秒间隔)');
+        }
+        
+        // 停止心跳
+        function stopHeartbeat() {
+            if (heartbeatTimer) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+            }
+        }
+        
         // 连接 WebSocket
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -614,13 +643,21 @@
             ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
-                console.log('WebSocket 已连接:', wsUrl);
+                console.log('✅ WebSocket 已连接:', wsUrl);
+                startHeartbeat(); // 开始心跳
                 checkStatus();
             };
             
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                console.log('收到消息:', data);
+                console.log('📨 收到消息:', data);
+                
+                // 心跳响应
+                if (data.type === 'heartbeat') {
+                    console.log('❤️ 心跳响应');
+                    return;
+                }
+                
                 if (data.type === 'response' && data.data) {
                     const aiMessage = data.data.output || data.data.message || '无响应';
                     appendMessage('assistant', aiMessage);
@@ -632,7 +669,8 @@
             };
             
             ws.onclose = () => {
-                console.log('WebSocket 已断开');
+                console.log('❌ WebSocket 已断开');
+                stopHeartbeat(); // 停止心跳
                 document.getElementById('statusDot').classList.add('offline');
                 document.getElementById('statusText').textContent = '未连接';
                 
@@ -641,7 +679,7 @@
             };
             
             ws.onerror = (error) => {
-                console.error('WebSocket 错误:', error);
+                console.error('⚠️ WebSocket 错误:', error);
             };
         }
         

@@ -180,11 +180,8 @@ class GatewayServer:
         # 事件序列号（用于检测丢失）
         self.event_seq = 0
         
-        # LangGraph Agent 实例（由 main.py 注入）
-        self.langgraph_agent = None
-        self.multi_agent_system = None
-        self.agent_mode = "langgraph"  # langgraph | multi | simple
-        self.agent_loop = None  # Agent 循环（兼容旧代码）
+        # Agent 循环（兼容旧代码）
+        self.agent_loop = None
         
         # 请求处理器注册表
         self.request_handlers: Dict[str, Callable] = {
@@ -222,6 +219,7 @@ class GatewayServer:
         
         logger.info(f"Gateway 服务器初始化：{host}:{port}")
         logger.info(f"模块注入：技能={skill_loader is not None}, 记忆={memory is not None}, 渠道={len(channels)}, 会话={session_manager is not None}, 工具={tool_registry is not None}")
+        logger.info(f"Agent 注入：LangGraph={langgraph_agent is not None}, Multi-Agent={multi_agent_system is not None}, 模式={agent_mode}")
     
     def _init_agents(self):
         """
