@@ -48,7 +48,8 @@ app = FastAPI(
 )
 
 # 静态文件和模板
-BASE_DIR = Path(__file__).parent
+# __file__ 是 app/main.py，需要上两级到 pyclaw-web/ 目录
+BASE_DIR = Path(__file__).parent.parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
