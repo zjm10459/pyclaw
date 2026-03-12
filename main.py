@@ -281,7 +281,7 @@ class GatewayRunner:
             
             # 注册 LangChain 工具（Python、Fetch、命令行、文件操作）
             try:
-                lc_count = langchain_tools.register_langchain_tools(self.tool_registry)
+                lc_count = lc_tools.register_langchain_tools(self.tool_registry)
                 logger.info(f"✓ LangChain 工具已注册：{lc_count} 个")
             except Exception as e:
                 logger.warning(f"注册 LangChain 工具失败：{e}")
