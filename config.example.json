@@ -53,7 +53,48 @@
   "multi_agent": {
     "_comment": "多 Agent 系统配置",
     "enabled_roles": "supervisor,researcher,coder,writer,analyst,executor",
-    "_comment2": "或者只启用核心角色：enabled_roles: supervisor,researcher,writer,executor"
+    "_comment2": "或者只启用核心角色：enabled_roles: supervisor,researcher,writer,executor",
+    
+    "_comment3": "为每个 Agent 配置独立的大模型和参数",
+    "agents": {
+      "supervisor": {
+        "model": "qwen3.5-plus",
+        "provider": "bailian",
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "max_iterations": 5
+      },
+      "researcher": {
+        "model": "qwen3.5-plus",
+        "provider": "bailian",
+        "temperature": 0.5,
+        "max_tokens": 4096
+      },
+      "coder": {
+        "model": "qwen2.5-coder-32b",
+        "provider": "bailian",
+        "temperature": 0.3,
+        "max_tokens": 4096
+      },
+      "writer": {
+        "model": "qwen3.5-plus",
+        "provider": "bailian",
+        "temperature": 0.8,
+        "max_tokens": 4096
+      },
+      "analyst": {
+        "model": "qwen3.5-plus",
+        "provider": "bailian",
+        "temperature": 0.5,
+        "max_tokens": 4096
+      },
+      "executor": {
+        "model": "qwen3-turbo",
+        "provider": "bailian",
+        "temperature": 0.7,
+        "max_tokens": 2048
+      }
+    }
   },
   
   "channels": {

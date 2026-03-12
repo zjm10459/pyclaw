@@ -377,13 +377,12 @@ class GatewayRunner:
         logger = logging.getLogger("pyclaw")
         
         try:
-            from agents.multi_agent import create_multi_agent_system, AgentRole, DEFAULT_AGENTS
+            from agents.multi_agent import MultiAgentCollaboration, AgentRole, DEFAULT_AGENTS
             
             # 获取工作区路径
             workspace_path = self.config.get("workspace", str(Path.cwd()))
             
             # 从配置中读取要启用的 Agent 角色
-            # 默认启用 4 个核心角色（平衡性能和功能）
             multi_agent_config = self.config.get("multi_agent", {})
             enabled_roles_str = multi_agent_config.get("enabled_roles", None)
             
@@ -406,9 +405,35 @@ class GatewayRunner:
                 # 默认启用所有角色
                 enabled_roles = list(DEFAULT_AGENTS.keys())
             
+            # 从配置文件加载自定义 Agent 配置
+            agent_definitions = None
+            agents_config = multi_agent_config.get("agents", {})
+            if agents_config:
+                from agents.multi_agent import AgentDefinition
+                agent_definitions = {}
+                for role_str, agent_cfg in agents_config.items():
+                    try:
+                        role = AgentRole(role_str)
+                        if role in DEFAULT_AGENTS:
+                            existing = DEFAULT_AGENTS[role]
+                            agent_definitions[role] = AgentDefinition(
+                                role=role,
+                                name=existing.name,
+                                description=existing.description,
+                                system_prompt=existing.system_prompt,
+                                model=agent_cfg.get("model", existing.model),
+                                provider=agent_cfg.get("provider", existing.provider),
+                                temperature=agent_cfg.get("temperature", existing.temperature),
+                                max_tokens=agent_cfg.get("max_tokens", existing.max_tokens),
+                                max_iterations=agent_cfg.get("max_iterations", existing.max_iterations),
+                            )
+                            logger.info(f"✓ 配置 Agent: {role.value} -> {agent_cfg.get('model', existing.model)}")
+                    except ValueError:
+                        logger.warning(f"未知的 Agent 角色：{role_str}")
+            
             # 创建多 Agent 系统（注入技能加载器）
-            self.multi_agent_system = create_multi_agent_system(
-                roles=enabled_roles,
+            self.multi_agent_system = MultiAgentCollaboration(
+                agent_definitions=agent_definitions,  # 使用自定义配置或默认配置
                 tool_registry=self.tool_registry,
                 workspace_path=workspace_path,
             )

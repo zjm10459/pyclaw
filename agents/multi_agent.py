@@ -286,19 +286,22 @@ class MultiAgentCollaboration:
         参数:
             config_path: 配置文件路径（JSON 格式）
         
-        配置文件格式示例：
+        配置文件格式示例（主配置文件）：
         {
-            "agents": {
-                "supervisor": {
-                    "model": "qwen3.5-plus",
-                    "provider": "bailian",
-                    "temperature": 0.7,
-                    "max_tokens": 4096
-                },
-                "coder": {
-                    "model": "qwen2.5-coder-32b",
-                    "provider": "bailian",
-                    "temperature": 0.3
+            "multi_agent": {
+                "enabled_roles": "supervisor,researcher,coder,writer,analyst,executor",
+                "agents": {
+                    "supervisor": {
+                        "model": "qwen3.5-plus",
+                        "provider": "bailian",
+                        "temperature": 0.7,
+                        "max_tokens": 4096
+                    },
+                    "coder": {
+                        "model": "qwen2.5-coder-32b",
+                        "provider": "bailian",
+                        "temperature": 0.3
+                    }
                 }
             }
         }
@@ -315,7 +318,15 @@ class MultiAgentCollaboration:
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
-            agents_config = config.get("agents", {})
+            # 支持两种格式：
+            # 1. 主配置文件格式：config.multi_agent.agents
+            # 2. 独立配置文件格式：config.agents
+            multi_agent_config = config.get("multi_agent", {})
+            agents_config = multi_agent_config.get("agents", {})
+            
+            # 如果没有 multi_agent.agents，尝试直接读取 agents（兼容独立配置文件）
+            if not agents_config:
+                agents_config = config.get("agents", {})
             
             for role_str, agent_cfg in agents_config.items():
                 try:
