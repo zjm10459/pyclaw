@@ -202,37 +202,125 @@ class LangGraphAgent:
         """LLM 初始化回退方案"""
         try:
             import os
+            import json
+            from pathlib import Path
+            
+            # 加载配置文件
+            provider_config = self._load_provider_config()
             
             if self.config.provider == "bailian":
                 # 通义千问 (阿里云) - 使用 langchain_community
                 from langchain_community.chat_models import ChatOpenAI
+                
+                # 从配置文件或环境变量获取 API 配置
+                api_base = provider_config.get("bailian", {}).get("base_url", 
+                            "https://dashscope.aliyuncs.com/compatible-mode/v1")
+                api_key = provider_config.get("bailian", {}).get("api_key", 
+                            os.getenv("DASHSCOPE_API_KEY", "sk-default"))
+                
+                # 处理环境变量占位符
+                if api_key.startswith("${") and api_key.endswith("}"):
+                    env_var_name = api_key[2:-1]
+                    api_key = os.getenv(env_var_name, "sk-default")
+                
                 self.llm = ChatOpenAI(
                     model=self.config.model,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
-                    openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    openai_api_key=os.getenv("DASHSCOPE_API_KEY", "sk-default"),
+                    openai_api_base=api_base,
+                    openai_api_key=api_key,
                 )
+                logger.info(f"LLM 初始化成功 (通义千问): {self.config.model}")
+            
             elif self.config.provider == "openai":
                 # OpenAI
                 from langchain_community.chat_models import ChatOpenAI
+                
+                api_base = provider_config.get("openai", {}).get("base_url", 
+                            "https://api.openai.com/v1")
+                api_key = provider_config.get("openai", {}).get("api_key", 
+                            os.getenv("OPENAI_API_KEY", ""))
+                
+                if api_key.startswith("${") and api_key.endswith("}"):
+                    env_var_name = api_key[2:-1]
+                    api_key = os.getenv(env_var_name, "")
+                
                 self.llm = ChatOpenAI(
                     model=self.config.model,
                     temperature=self.config.temperature,
+                    openai_api_base=api_base,
+                    openai_api_key=api_key,
                 )
+                logger.info(f"LLM 初始化成功 (OpenAI): {self.config.model}")
+            
+            elif self.config.provider == "anthropic":
+                # Anthropic
+                from langchain_community.chat_models import ChatAnthropic
+                
+                api_key = provider_config.get("anthropic", {}).get("api_key", 
+                            os.getenv("ANTHROPIC_API_KEY", ""))
+                
+                if api_key.startswith("${") and api_key.endswith("}"):
+                    env_var_name = api_key[2:-1]
+                    api_key = os.getenv(env_var_name, "")
+                
+                self.llm = ChatAnthropic(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    anthropic_api_key=api_key,
+                )
+                logger.info(f"LLM 初始化成功 (Anthropic): {self.config.model}")
+            
             else:
                 # 默认使用 langchain_community 的 ChatOpenAI
                 from langchain_community.chat_models import ChatOpenAI
+                
+                api_key = os.getenv("OPENAI_API_KEY", "")
                 self.llm = ChatOpenAI(
                     model=self.config.model if ":" not in self.config.model else "gpt-4",
                     temperature=self.config.temperature,
+                    openai_api_key=api_key,
                 )
+                logger.info(f"LLM 初始化成功 (默认): {self.config.model}")
             
             logger.info(f"LLM 初始化成功 (回退模式): {self.config.provider}/{self.config.model}")
         
         except Exception as e:
             logger.exception(f"LLM 初始化失败：{e}")
             raise
+    
+    def _load_provider_config(self) -> Dict[str, Any]:
+        """
+        加载 Provider 配置文件
+        
+        返回:
+            Provider 配置字典
+        """
+        from pathlib import Path
+        import json
+        
+        # 可能的配置文件路径
+        config_paths = [
+            Path.cwd() / "config.json",
+            Path.home() / ".pyclaw" / "config.json",
+            Path(__file__).parent.parent / "config.json",
+        ]
+        
+        for config_path in config_paths:
+            if config_path.exists():
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        providers = config.get("providers", {})
+                        logger.debug(f"从 {config_path} 加载 Provider 配置")
+                        return providers
+                except Exception as e:
+                    logger.warning(f"加载配置文件失败 {config_path}: {e}")
+        
+        # 如果没有配置文件，返回空字典（使用环境变量）
+        logger.debug("未找到配置文件，将使用环境变量")
+        return {}
     
     def _init_tools(self):
         """
