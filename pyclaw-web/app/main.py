@@ -387,6 +387,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket 实时通信"""
     await websocket.accept()
     
+    # 启用 WebSocket ping/pong（协议层心跳）
+    # 注意：FastAPI/WebSocket 不直接支持 ping_interval 配置
+    # 使用应用层心跳替代
+    
     # 创建会话
     session = session_manager.get_session(session_id)
     if not session:
@@ -404,12 +408,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
             logger.debug(f"收到客户端消息：{data}")
             
-            # 处理心跳
+            # 处理应用层心跳
             if data.get("type") == "heartbeat":
+                logger.debug(f"收到应用层心跳：{data}")
                 await websocket.send_json({
                     "type": "heartbeat",
                     "timestamp": datetime.now().isoformat(),
+                    "status": "ok",
                 })
+                logger.debug("已回复应用层心跳")
                 continue
             
             message = data.get("message", "")

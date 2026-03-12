@@ -604,25 +604,25 @@
             }
         }
         
-        // WebSocket 心跳定时器
+        // WebSocket 心跳定时器（应用层）
         let heartbeatTimer = null;
         
-        // 发送心跳
+        // 发送应用层心跳
         function sendHeartbeat() {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'heartbeat',
                     timestamp: Date.now()
                 }));
-                console.log('❤️ 发送心跳');
+                console.log('❤️ 发送应用层心跳');
             }
         }
         
         // 开始心跳
         function startHeartbeat() {
             if (heartbeatTimer) clearInterval(heartbeatTimer);
-            heartbeatTimer = setInterval(sendHeartbeat, 30000); // 30 秒一次
-            console.log('💓 开始心跳 (30 秒间隔)');
+            heartbeatTimer = setInterval(sendHeartbeat, 25000); // 25 秒一次（比 Gateway ping 稍短）
+            console.log('💓 开始应用层心跳 (25 秒间隔)');
         }
         
         // 停止心跳
@@ -642,9 +642,14 @@
             
             ws = new WebSocket(wsUrl);
             
+            // 注意：浏览器 WebSocket 不支持直接配置 ping/pong
+            // 协议层的 ping/pong 由浏览器自动处理
+            // 我们使用应用层心跳（每 25 秒发送一次）
+            
             ws.onopen = () => {
                 console.log('✅ WebSocket 已连接:', wsUrl);
-                startHeartbeat(); // 开始心跳
+                console.log('🔔 浏览器会自动响应协议层 ping/pong');
+                startHeartbeat(); // 开始应用层心跳
                 checkStatus();
             };
             
