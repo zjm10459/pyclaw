@@ -610,24 +610,33 @@
         // 发送应用层心跳
         function sendHeartbeat() {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
+                const heartbeatData = JSON.stringify({
                     type: 'heartbeat',
                     timestamp: Date.now()
-                }));
-                console.log('❤️ 发送应用层心跳');
+                });
+                ws.send(heartbeatData);
+                console.log('❤️ 发送应用层心跳:', heartbeatData);
+            } else {
+                console.warn('⚠️ WebSocket 未连接，无法发送心跳，状态:', ws?.readyState);
             }
         }
         
         // 开始心跳
         function startHeartbeat() {
-            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            if (heartbeatTimer) {
+                console.log('🔄 清除旧的心跳定时器');
+                clearInterval(heartbeatTimer);
+            }
             heartbeatTimer = setInterval(sendHeartbeat, 25000); // 25 秒一次（比 Gateway ping 稍短）
-            console.log('💓 开始应用层心跳 (25 秒间隔)');
+            console.log('💓 开始应用层心跳 (25 秒间隔)，定时器 ID:', heartbeatTimer);
+            // 立即发送一次心跳
+            setTimeout(sendHeartbeat, 1000);
         }
         
         // 停止心跳
         function stopHeartbeat() {
             if (heartbeatTimer) {
+                console.log('⏹️ 停止心跳定时器:', heartbeatTimer);
                 clearInterval(heartbeatTimer);
                 heartbeatTimer = null;
             }
