@@ -306,6 +306,7 @@ class Protocol:
     # 支持的方法列表
     SUPPORTED_METHODS = {
         "connect": "建立连接",
+        "heartbeat": "心跳保持",
         "agent": "执行代理",
         "agent.wait": "等待代理完成",
         "send": "发送消息",
