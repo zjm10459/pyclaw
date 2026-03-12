@@ -166,7 +166,26 @@ class PyClawGatewayClient:
                 url = f"{self.gateway_url}?token={self.token}"
             
             self.ws = await self.session.ws_connect(url)
-            logger.info(f"已连接到 PyClaw Gateway: {self.gateway_url}")
+            logger.info(f"WebSocket 已连接：{self.gateway_url}")
+            
+            # 发送 connect 请求（必须是第一个消息）
+            connect_request = {
+                "type": "req",
+                "id": str(uuid.uuid4()),
+                "method": "connect",
+                "params": {
+                    "auth": {"token": self.token} if self.token else {},
+                },
+            }
+            await self.ws.send_json(connect_request)
+            
+            # 等待 connect 响应
+            connect_response = await asyncio.wait_for(self.ws.receive_json(), timeout=10.0)
+            if connect_response.get("type") == "res" and connect_response.get("ok"):
+                logger.info("✓ Gateway 连接成功")
+            else:
+                logger.warning(f"⚠ Gateway 连接响应：{connect_response}")
+            
         except Exception as e:
             logger.error(f"连接 Gateway 失败：{e}")
             raise
@@ -375,7 +394,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     logger.info(f"WebSocket 连接：{session_id}")
     
     try:
-        # 连接到 Gateway
+        # 连接到 Gateway（会自动发送 connect 请求）
         if not gateway_client.ws or gateway_client.ws.closed:
             await gateway_client.connect()
         
