@@ -534,12 +534,24 @@
                 </div>
             `;
             
+            // 重新连接 WebSocket（使用新的 session_id）
+            if (ws) {
+                ws.close();
+            }
+            connectWebSocket();
+            
             await loadSessions();
         }
         
         // 选择会话
         async function selectSession(sessionId) {
             currentSessionId = sessionId;
+            
+            // 重新连接 WebSocket（使用新的 session_id）
+            if (ws) {
+                ws.close();
+            }
+            connectWebSocket();
             
             // 加载会话详情
             try {
@@ -595,17 +607,20 @@
         // 连接 WebSocket
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/default`;
+            // 使用当前 session_id，如果没有则使用 'default'
+            const sessionId = currentSessionId || 'default';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
             
             ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
-                console.log('WebSocket 已连接');
+                console.log('WebSocket 已连接:', wsUrl);
                 checkStatus();
             };
             
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log('收到消息:', data);
                 if (data.type === 'response' && data.data) {
                     const aiMessage = data.data.output || data.data.message || '无响应';
                     appendMessage('assistant', aiMessage);
