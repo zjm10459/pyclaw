@@ -1,5 +1,0 @@
-"""
-PyClaw Web - FastAPI 聊天监控系统
-"""
-
-__version__ = "1.0.0"

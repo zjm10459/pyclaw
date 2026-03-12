@@ -139,7 +139,6 @@ Changelog = "https://github.com/pyclaw/pyclaw/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pyclaw = "pyclaw.cli:main"
-pyclaw-web = "pyclaw_web.run:main"
 
 [project.entry-points."pyclaw.plugins"]
 # 预留插件入口点
@@ -151,7 +150,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agents*", "channels*", "config*", "gateway*", "memory*", "pyclaw_web*", "scheduler*", "sessions*", "skills*", "tests*", "tools*", "utils*"]
+include = ["agents*", "channels*", "config*", "gateway*", "memory*", "scheduler*", "sessions*", "skills*", "tests*", "tools*", "utils*"]
 exclude = ["__pycache__", "*.egg-info", ".venv", ".git"]
 
 # Black 配置
