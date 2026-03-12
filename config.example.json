@@ -50,6 +50,12 @@
     "rerank_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
   },
   
+  "multi_agent": {
+    "_comment": "多 Agent 系统配置",
+    "enabled_roles": "supervisor,researcher,coder,writer,analyst,executor",
+    "_comment2": "或者只启用核心角色：enabled_roles: supervisor,researcher,writer,executor"
+  },
+  
   "channels": {
     "feishu": {
       "enabled": false,

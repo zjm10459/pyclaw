@@ -377,19 +377,38 @@ class GatewayRunner:
         logger = logging.getLogger("pyclaw")
         
         try:
-            from agents.multi_agent import create_multi_agent_system, AgentRole
+            from agents.multi_agent import create_multi_agent_system, AgentRole, DEFAULT_AGENTS
             
             # 获取工作区路径
             workspace_path = self.config.get("workspace", str(Path.cwd()))
             
+            # 从配置中读取要启用的 Agent 角色
+            # 默认启用 4 个核心角色（平衡性能和功能）
+            multi_agent_config = self.config.get("multi_agent", {})
+            enabled_roles_str = multi_agent_config.get("enabled_roles", None)
+            
+            if enabled_roles_str:
+                # 从配置文件读取
+                if isinstance(enabled_roles_str, str):
+                    enabled_roles_str = [r.strip() for r in enabled_roles_str.split(",")]
+                
+                enabled_roles = []
+                for role_str in enabled_roles_str:
+                    try:
+                        role = AgentRole(role_str)
+                        enabled_roles.append(role)
+                    except ValueError:
+                        logger.warning(f"未知的 Agent 角色：{role_str}")
+                
+                if not enabled_roles:
+                    enabled_roles = list(DEFAULT_AGENTS.keys())
+            else:
+                # 默认启用所有角色
+                enabled_roles = list(DEFAULT_AGENTS.keys())
+            
             # 创建多 Agent 系统（注入技能加载器）
             self.multi_agent_system = create_multi_agent_system(
-                roles=[
-                    AgentRole.SUPERVISOR,
-                    AgentRole.RESEARCHER,
-                    AgentRole.WRITER,
-                    AgentRole.EXECUTOR,
-                ],
+                roles=enabled_roles,
                 tool_registry=self.tool_registry,
                 workspace_path=workspace_path,
             )
@@ -399,6 +418,7 @@ class GatewayRunner:
                 agent.skill_loader = self.skill_loader
             
             logger.info(f"✓ 多 Agent 协作系统已初始化：{len(self.multi_agent_system.agents)} 个 Agent")
+            logger.info(f"  启用的角色：{', '.join([r.value for r in enabled_roles])}")
         
         except Exception as e:
             logger.warning(f"多 Agent 协作系统初始化失败：{e}")
