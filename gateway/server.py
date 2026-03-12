@@ -260,14 +260,18 @@ class GatewayServer:
                 logger.error(f"启动渠道 {name} 失败：{e}")
         
         # 启动 WebSocket 服务器
+        # ping_interval: 每 30 秒发送 ping
+        # ping_timeout: 10 秒内未收到 pong 则断开
+        # 客户端需要在 10 秒内响应 pong
         self.server = await websockets.serve(
             self._handle_connection,
             self.host,
             self.port,
-            ping_interval=30,  # 30 秒心跳
-            ping_timeout=10,   # 10 秒超时
+            ping_interval=30,  # 30 秒发送一次 ping
+            ping_timeout=20,   # 20 秒超时（给客户端更多时间）
             max_size=Protocol.MAX_MESSAGE_SIZE,
         )
+        logger.info(f"WebSocket 心跳配置：ping_interval=30s, ping_timeout=20s")
         
         logger.info(f"Gateway 服务器运行中 (PID: {id(self.server)})")
         

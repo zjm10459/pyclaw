@@ -166,8 +166,15 @@ class PyClawGatewayClient:
             if self.token:
                 url = f"{self.gateway_url}?token={self.token}"
             
-            self.ws = await self.session.ws_connect(url)
-            logger.info(f"WebSocket 已连接：{self.gateway_url}")
+            # 配置 WebSocket 心跳参数
+            # heartbeat: 自动发送 ping 并期望 pong 响应（秒）
+            # 设置为 20 秒，比 Gateway 的 ping_interval=30 稍短
+            self.ws = await self.session.ws_connect(
+                url,
+                heartbeat=20,  # 20 秒心跳
+                receive_timeout=60,  # 60 秒接收超时
+            )
+            logger.info(f"WebSocket 已连接：{self.gateway_url} (heartbeat=20s)")
             
             # 发送 connect 请求（必须是第一个消息）
             connect_request = {
