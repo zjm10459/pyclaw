@@ -153,12 +153,18 @@ class PyClawGatewayClient:
             logger.info(f"WebSocket 已连接：{self.gateway_url}")
             
             # 发送 connect 请求（必须是第一个消息）
+            # 使用固定的 device_id，避免每次连接都产生新的配对记录
             connect_request = {
                 "type": "req",
                 "id": str(uuid.uuid4()),
                 "method": "connect",
                 "params": {
                     "auth": {"token": self.token} if self.token else {},
+                    "device": {
+                        "device_id": "pyclaw-web",  # 固定设备 ID
+                        "name": "PyClaw Web",
+                        "type": "web_client",
+                    },
                 },
             }
             await self.ws.send_json(connect_request)
