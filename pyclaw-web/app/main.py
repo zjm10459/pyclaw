@@ -142,19 +142,15 @@ class PyClawGatewayClient:
             if self.token:
                 url = f"{self.gateway_url}?token={self.token}"
             
-            # 配置 heartbeat 让 aiohttp 自动响应 Gateway 的 ping
-            # Gateway 配置：ping_interval=15, ping_timeout=30
-            # aiohttp 的 heartbeat 参数会定期发送 ping，并在接收消息时自动响应服务器的 ping
+            # 配置 heartbeat 让 aiohttp 定期发送 ping
+            # 注意：aiohttp 的 heartbeat 不自动响应服务器的 ping
+            # 解决方案：在 /api/status 端点中检测断开并自动重连
             self.ws = await self.session.ws_connect(
                 url,
-                heartbeat=30,  # 每 30 秒发送 ping
-                receive_timeout=None,  # 不设置接收超时（由 Gateway 控制）
+                heartbeat=10,  # 每 10 秒发送 ping（比 Gateway 的 ping_interval 更频繁）
+                receive_timeout=None,  # 不设置接收超时
             )
             logger.info(f"WebSocket 已连接：{self.gateway_url}")
-            
-            # 启动后台任务：持续接收消息（包括 Gateway 的 ping），触发自动 pong 响应
-            # aiohttp 需要在 receive 循环中才能自动响应服务器的 ping
-            asyncio.create_task(self._keepalive_receiver())
             
             # 发送 connect 请求（必须是第一个消息）
             # 使用固定的 device_id，避免每次连接都产生新的配对记录
@@ -183,39 +179,6 @@ class PyClawGatewayClient:
         except Exception as e:
             logger.error(f"连接 Gateway 失败：{e}")
             raise
-    
-    async def _keepalive_receiver(self):
-        """
-        后台接收任务：持续接收消息，让 aiohttp 能自动响应 Gateway 的 ping
-        
-        aiohttp 的 heartbeat 机制需要在 receive 循环中才能自动响应服务器的 ping。
-        这个任务会忽略协议层的 ping/pong，只处理应用层消息。
-        """
-        try:
-            logger.debug("keepalive 接收任务启动")
-            while self.ws and not self.ws.closed:
-                try:
-                    # 接收消息（包括协议层 ping，aiohttp 会自动响应 pong）
-                    msg = await self.ws.receive(timeout=10.0)
-                    
-                    if msg.type == aiohttp.WSMsgType.CLOSED:
-                        logger.info("WebSocket 已关闭，停止 keepalive 接收")
-                        break
-                    elif msg.type == aiohttp.WSMsgType.ERROR:
-                        logger.warning(f"WebSocket 错误：{self.ws.exception()}")
-                        break
-                    elif msg.type == aiohttp.WSMsgType.PING:
-                        logger.debug("收到 PING，aiohttp 会自动回复 PONG")
-                    elif msg.type == aiohttp.WSMsgType.PONG:
-                        logger.debug("收到 PONG")
-                    # 其他消息类型由 aiohttp 自动处理
-                
-                except asyncio.TimeoutError:
-                    # 超时是正常的，继续循环
-                    pass
-        
-        except Exception as e:
-            logger.warning(f"keepalive 接收任务结束：{e}")
     
     async def disconnect(self):
         """断开连接"""
