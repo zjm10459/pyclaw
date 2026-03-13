@@ -364,7 +364,12 @@ async def chat(chat_msg: ChatMessage):
 async def startup_event():
     """启动事件"""
     logger.info("PyClaw Web 启动中...")
-    # 不自动连接 Gateway，按需连接
+    # 启动时自动连接 Gateway
+    try:
+        await gateway_client.connect()
+        logger.info("✅ 已自动连接到 Gateway")
+    except Exception as e:
+        logger.warning(f"⚠️ 启动时连接 Gateway 失败：{e}，将在首次请求时重试")
 
 
 @app.on_event("shutdown")
