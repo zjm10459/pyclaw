@@ -354,13 +354,28 @@ class LangGraphAgent:
         
         for tool_name, tool_def in self.tool_registry.tools.items():
             try:
-                # 创建 LangChain StructuredTool
-                langchain_tool = StructuredTool(
-                    name=tool_def.name,
-                    description=tool_def.description,
-                    func=tool_def.function,
-                    args_schema=getattr(tool_def, 'schema', None),
-                )
+                # 检查是否是 ToolDefinition 对象
+                if hasattr(tool_def, 'function'):
+                    # ToolDefinition 对象，使用 function 属性
+                    langchain_tool = StructuredTool(
+                        name=tool_def.name,
+                        description=tool_def.description,
+                        func=tool_def.function,
+                        args_schema=getattr(tool_def, 'schema', None),
+                    )
+                elif hasattr(tool_def, '_run'):
+                    # LangChain 工具对象（如 RequestsGetTool, ReadFileTool 等）
+                    # 使用 _run 方法作为入口
+                    langchain_tool = StructuredTool(
+                        name=getattr(tool_def, 'name', tool_name),
+                        description=getattr(tool_def, 'description', ''),
+                        func=tool_def._run,
+                        args_schema=getattr(tool_def, 'args_schema', None),
+                    )
+                else:
+                    logger.warning(f"⚠ 未知工具类型：{tool_name}")
+                    continue
+                
                 langchain_tools.append(langchain_tool)
                 logger.debug(f"工具转换成功：{tool_name}")
             except Exception as e:
