@@ -1,9 +1,8 @@
-// PyClaw Chat JavaScript
+// PyClaw Chat JavaScript - 通过 pyclaw-web 后端代理（不直接连 Gateway）
 
 class PyClawChat {
-    constructor(gatewayUrl) {
-        this.gatewayUrl = gatewayUrl;
-        this.ws = null;
+    constructor(baseUrl) {
+        this.baseUrl = baseUrl;  // pyclaw-web 后端地址
         this.connected = false;
         this.messagesEl = document.getElementById('chat-messages');
         this.inputEl = document.getElementById('message-input');
@@ -29,111 +28,67 @@ class PyClawChat {
             this.addSystemMessage('对话已清空');
         });
         
-        // 连接 WebSocket
-        this.connect();
+        // 检查后端连接状态
+        this.checkStatus();
     }
     
-    connect() {
-        this.updateStatus('connecting', '连接中...');
-        
+    async checkStatus() {
         try {
-            this.ws = new WebSocket(this.gatewayUrl.replace('ws://', 'http://').replace('wss://', 'https://'));
+            const response = await fetch(`${this.baseUrl}/api/status`);
+            const status = await response.json();
             
-            this.ws.onopen = () => {
+            if (status.status === 'online') {
                 this.connected = true;
-                this.updateStatus('connected', '已连接');
+                this.updateStatus('connected', '已连接 (通过后端代理)');
                 this.sendBtn.disabled = false;
-                this.addSystemMessage('已连接到 PyClaw Gateway');
-                
-                // 发送 connect 请求
-                this.sendConnect();
-            };
-            
-            this.ws.onmessage = (event) => {
-                this.handleMessage(event.data);
-            };
-            
-            this.ws.onclose = () => {
-                this.connected = false;
-                this.updateStatus('disconnected', '已断开');
-                this.sendBtn.disabled = true;
-                this.addSystemMessage('连接已断开');
-            };
-            
-            this.ws.onerror = (error) => {
-                console.error('WebSocket 错误:', error);
-                this.updateStatus('disconnected', '连接失败');
-            };
+                this.addSystemMessage('已连接到 PyClaw Web 后端');
+            } else {
+                throw new Error('后端未在线');
+            }
         } catch (error) {
             console.error('连接失败:', error);
+            this.connected = false;
             this.updateStatus('disconnected', '连接失败');
+            this.sendBtn.disabled = true;
+            this.addSystemMessage('无法连接到后端：' + error.message);
         }
     }
     
-    sendConnect() {
-        const connectMsg = {
-            id: 'web-connect-' + Date.now(),
-            method: 'connect',
-            params: {
-                auth: {},
-                device: {
-                    device_id: 'web-client',
-                    name: 'PyClaw Web'
-                }
-            }
-        };
-        
-        this.ws.send(JSON.stringify(connectMsg));
-    }
-    
-    sendMessage() {
+    async sendMessage() {
         const content = this.inputEl.value.trim();
         if (!content || !this.connected) return;
         
         // 显示用户消息
         this.addMessage('user', content);
         this.inputEl.value = '';
+        this.sendBtn.disabled = true;
         
-        // 发送 agent 请求
-        const agentMsg = {
-            id: 'web-agent-' + Date.now(),
-            method: 'agent',
-            params: {
-                sessionKey: 'agent:main:web-user',
-                messages: [
-                    {
-                        role: 'user',
-                        content: content
-                    }
-                ]
-            }
-        };
-        
-        this.ws.send(JSON.stringify(agentMsg));
-    }
-    
-    handleMessage(data) {
         try {
-            const response = JSON.parse(data);
-            console.log('收到响应:', response);
+            // 通过 HTTP POST 发送到后端
+            const response = await fetch(`${this.baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: 'agent:main:web-user',
+                    message: content,
+                    mode: 'single',
+                }),
+            });
             
-            if (response.ok && response.result) {
-                const result = response.result;
-                
-                // 处理 agent 响应
-                if (result.content) {
-                    this.addMessage('assistant', result.content);
-                }
-                
-                // 处理 connect 响应
-                if (result.status === 'hello-ok') {
-                    this.addSystemMessage(`Gateway 版本：${result.version}`);
-                }
-            } else if (response.error) {
-                this.addSystemMessage('错误：' + response.error);
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addMessage('assistant', result.message);
+            } else {
+                this.addSystemMessage('错误：' + result.message);
             }
         } catch (error) {
-            console.error('解析响应失败:', error);
+            console.error('发送失败:', error);
+            this.addSystemMessage('发送失败：' + error.message);
+        } finally {
+            this.sendBtn.disabled = false;
         }
     }
     

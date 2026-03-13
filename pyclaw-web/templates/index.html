@@ -452,13 +452,12 @@
         // 全局状态
         let currentSessionId = null;
         let currentMode = 'single';
-        let ws = null;
+        // 不再使用 WebSocket 直连 Gateway，全部通过 HTTP 与后端通信
         
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
             checkStatus();
             loadSessions();
-            connectWebSocket();
         });
         
         // 检查系统状态
@@ -534,24 +533,12 @@
                 </div>
             `;
             
-            // 重新连接 WebSocket（使用新的 session_id）
-            if (ws) {
-                ws.close();
-            }
-            connectWebSocket();
-            
             await loadSessions();
         }
         
         // 选择会话
         async function selectSession(sessionId) {
             currentSessionId = sessionId;
-            
-            // 重新连接 WebSocket（使用新的 session_id）
-            if (ws) {
-                ws.close();
-            }
-            connectWebSocket();
             
             // 加载会话详情
             try {
@@ -604,100 +591,10 @@
             }
         }
         
-        // WebSocket 心跳定时器（应用层）
-        let heartbeatTimer = null;
+        // 不再需要 WebSocket 连接，全部通过 HTTP 与后端通信
+        // 后端的 Python WebSocket 客户端已配置 heartbeat，会自动处理 ping/pong
         
-        // 发送应用层心跳
-        function sendHeartbeat() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const heartbeatData = JSON.stringify({
-                    type: 'heartbeat',
-                    timestamp: Date.now()
-                });
-                ws.send(heartbeatData);
-                console.log('❤️ 发送应用层心跳:', heartbeatData);
-            } else {
-                console.warn('⚠️ WebSocket 未连接，无法发送心跳，状态:', ws?.readyState);
-            }
-        }
-        
-        // 开始心跳
-        function startHeartbeat() {
-            if (heartbeatTimer) {
-                console.log('🔄 清除旧的心跳定时器');
-                clearInterval(heartbeatTimer);
-            }
-            heartbeatTimer = setInterval(sendHeartbeat, 25000); // 25 秒一次（比 Gateway ping 稍短）
-            console.log('💓 开始应用层心跳 (25 秒间隔)，定时器 ID:', heartbeatTimer);
-            // 立即发送一次心跳
-            setTimeout(sendHeartbeat, 1000);
-        }
-        
-        // 停止心跳
-        function stopHeartbeat() {
-            if (heartbeatTimer) {
-                console.log('⏹️ 停止心跳定时器:', heartbeatTimer);
-                clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
-            }
-        }
-        
-        // 连接 WebSocket
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            // 使用当前 session_id，如果没有则使用 'default'
-            const sessionId = currentSessionId || 'default';
-            const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
-            
-            ws = new WebSocket(wsUrl);
-            
-            // 注意：浏览器 WebSocket 不支持直接配置 ping/pong
-            // 协议层的 ping/pong 由浏览器自动处理
-            // 我们使用应用层心跳（每 25 秒发送一次）
-            
-            ws.onopen = () => {
-                console.log('✅ WebSocket 已连接:', wsUrl);
-                console.log('🔔 浏览器会自动响应协议层 ping/pong');
-                startHeartbeat(); // 开始应用层心跳
-                checkStatus();
-            };
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                console.log('📨 收到消息:', data);
-                
-                // 心跳响应
-                if (data.type === 'heartbeat') {
-                    console.log('❤️ 心跳响应');
-                    return;
-                }
-                
-                if (data.type === 'response' && data.data) {
-                    const aiMessage = data.data.output || data.data.message || '无响应';
-                    appendMessage('assistant', aiMessage);
-                    document.getElementById('sendBtn').disabled = false;
-                } else if (data.type === 'error') {
-                    appendMessage('assistant', `错误：${data.message}`);
-                    document.getElementById('sendBtn').disabled = false;
-                }
-            };
-            
-            ws.onclose = () => {
-                console.log('❌ WebSocket 已断开');
-                stopHeartbeat(); // 停止心跳
-                document.getElementById('statusDot').classList.add('offline');
-                document.getElementById('statusText').textContent = '未连接';
-                
-                // 3 秒后重连
-                setTimeout(connectWebSocket, 3000);
-            };
-            
-            ws.onerror = (error) => {
-                console.error('⚠️ WebSocket 错误:', error);
-            };
-        }
-        
-        // 发送消息
+        // 发送消息（纯 HTTP 方式，不再使用 WebSocket）
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
@@ -714,33 +611,24 @@
             input.value = '';
             document.getElementById('sendBtn').disabled = true;
             
-            // 通过 WebSocket 发送
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    session_id: currentSessionId,
-                    message: message,
-                    mode: currentMode,
-                }));
-            } else {
-                // 降级使用 HTTP
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            session_id: currentSessionId,
-                            message: message,
-                            mode: currentMode,
-                        }),
-                    });
-                    
-                    const data = await response.json();
-                    appendMessage('assistant', data.message);
-                    document.getElementById('sendBtn').disabled = false;
-                } catch (error) {
-                    appendMessage('assistant', `错误：${error.message}`);
-                    document.getElementById('sendBtn').disabled = false;
-                }
+            // 通过 HTTP POST 发送到后端
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        message: message,
+                        mode: currentMode,
+                    }),
+                });
+                
+                const data = await response.json();
+                appendMessage('assistant', data.message);
+            } catch (error) {
+                appendMessage('assistant', `错误：${error.message}`);
+            } finally {
+                document.getElementById('sendBtn').disabled = false;
             }
         }
         
