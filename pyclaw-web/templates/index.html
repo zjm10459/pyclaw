@@ -523,23 +523,59 @@
         }
         
         // 创建新会话
-        async function createNewSession() {
-            const sessionId = 'session_' + Date.now();
-            currentSessionId = sessionId;
-            currentMode = 'single';
-            
-            document.getElementById('modeSelect').value = 'single';
-            document.getElementById('messagesContainer').innerHTML = `
-                <div class="message assistant">
-                    <div class="message-avatar">AI</div>
-                    <div class="message-content">
-                        你好！我是 PyClaw AI 助手，有什么可以帮你的吗？
-                        <div class="message-time">刚刚</div>
-                    </div>
-                </div>
-            `;
-            
-            await loadSessions();
+        async function createNewSession(autoSelect = true) {
+            try {
+                // 调用后端 API 创建会话
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: 'session_' + Date.now(),
+                        mode: 'single',
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const sessionId = data.session.id;
+                    currentSessionId = sessionId;
+                    currentMode = 'single';
+                    
+                    document.getElementById('modeSelect').value = 'single';
+                    document.getElementById('messagesContainer').innerHTML = `
+                        <div class="message assistant">
+                            <div class="message-avatar">AI</div>
+                            <div class="message-content">
+                                你好！我是 PyClaw AI 助手，有什么可以帮你的吗？
+                                <div class="message-time">刚刚</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 重新加载会话列表（新会话会显示在左侧）
+                    await loadSessions();
+                    
+                    if (autoSelect) {
+                        // 高亮选中新创建的会话
+                        setTimeout(() => {
+                            const sessionsList = document.getElementById('sessionsList');
+                            const items = sessionsList.querySelectorAll('.session-item');
+                            items.forEach(item => {
+                                const h3 = item.querySelector('h3');
+                                if (h3 && h3.textContent.includes(sessionId.substring(0, 8))) {
+                                    item.classList.add('active');
+                                } else {
+                                    item.classList.remove('active');
+                                }
+                            });
+                        }, 100);
+                    }
+                }
+            } catch (error) {
+                console.error('创建会话失败:', error);
+                alert('创建会话失败：' + error.message);
+            }
         }
         
         // 选择会话

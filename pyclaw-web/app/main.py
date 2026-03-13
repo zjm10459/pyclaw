@@ -18,6 +18,7 @@ import json
 import asyncio
 import logging
 import uuid
+import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -293,6 +294,22 @@ async def get_session(session_id: str):
         "success": True,
         "session": session,
         # 历史消息由 Gateway 的 session manager 管理，此处不返回
+    }
+
+
+@app.post("/api/sessions")
+async def create_session(session_data: dict):
+    """创建新会话"""
+    session_id = session_data.get("session_id", f"session_{int(time.time())}")
+    mode = session_data.get("mode", "single")
+    
+    # 创建会话
+    session = session_manager.create_session(session_id)
+    session_manager.update_session(session_id, mode=mode)
+    
+    return {
+        "success": True,
+        "session": session,
     }
 
 
