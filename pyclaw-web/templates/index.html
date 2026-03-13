@@ -458,6 +458,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             checkStatus();
             loadSessions();
+            // 如果没有会话，自动创建一个默认会话
+            setTimeout(() => {
+                if (!currentSessionId) {
+                    createNewSession();
+                }
+            }, 500);
         });
         
         // 检查系统状态
