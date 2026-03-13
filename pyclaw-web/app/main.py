@@ -342,14 +342,7 @@ async def chat(chat_msg: ChatMessage):
         # 更新会话模式
         session_manager.update_session(chat_msg.session_id, mode=chat_msg.mode)
         
-        # 添加用户消息到历史
-        session_manager.add_message(
-            chat_msg.session_id,
-            "user",
-            chat_msg.message,
-        )
-        
-        # 发送到 Gateway
+        # 发送到 Gateway（Gateway 的 session manager 会自动维护历史）
         response = await gateway_client.send_message(
             session_id=chat_msg.session_id,
             message=chat_msg.message,
@@ -362,14 +355,6 @@ async def chat(chat_msg: ChatMessage):
             ai_message = response.get("output", response.get("message", ""))
         else:
             ai_message = f"错误：{response.get('error', '未知错误')}"
-        
-        # 添加 AI 消息到历史
-        session_manager.add_message(
-            chat_msg.session_id,
-            "assistant",
-            ai_message,
-            metadata=response,
-        )
         
         return ChatResponse(
             success=response.get("success", False),
@@ -422,11 +407,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 logger.warning("消息为空，跳过")
                 continue
             
-            # 添加用户消息到历史
-            session_manager.add_message(session_id, "user", message)
             logger.info(f"发送消息到 Gateway: session={session_id}, message={message[:50]}...")
             
-            # 发送到 Gateway
+            # 发送到 Gateway（Gateway 的 session manager 会自动维护历史）
             try:
                 response = await gateway_client.send_message(
                     session_id=session_id,
@@ -442,18 +425,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     "data": response,
                 })
                 
-                # 添加 AI 消息到历史
-                if response.get("success"):
-                    ai_message = response.get("output", response.get("message", ""))
-                    session_manager.add_message(
-                        session_id,
-                        "assistant",
-                        ai_message,
-                        metadata=response,
-                    )
-                else:
-                    logger.error(f"Gateway 返回失败：{response.get('error')}")
-            
             except Exception as e:
                 logger.error(f"Gateway 通信失败：{e}")
                 await websocket.send_json({
