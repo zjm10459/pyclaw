@@ -293,6 +293,35 @@ class GatewayRunner:
             except Exception as e:
                 logger.warning(f"注册自定义工具失败：{e}")
             
+            # 注册技能工具（从 ~/.pyclaw/skills/ 加载的技能）
+            if self.skill_loader:
+                try:
+                    from skills.skill_loader import Skill
+                    skill_count = 0
+                    for skill in self.skill_loader.list_skills():
+                        # 检查技能是否有工具注册函数
+                        skill_tool_module = skill.path / "email_tools.py"
+                        if skill_tool_module.exists():
+                            # 导入技能工具模块
+                            import importlib.util
+                            spec = importlib.util.spec_from_file_location(
+                                f"skill_{skill.name}_tools",
+                                skill_tool_module
+                            )
+                            skill_tools_module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(skill_tools_module)
+                            
+                            # 调用 register_all 函数（如果存在）
+                            if hasattr(skill_tools_module, 'register_all'):
+                                skill_tools_module.register_all(self.tool_registry)
+                                skill_count += 1
+                                logger.debug(f"✓ 技能工具已注册：{skill.name}")
+                    
+                    if skill_count > 0:
+                        logger.info(f"✓ 技能工具已注册：{skill_count} 个技能")
+                except Exception as e:
+                    logger.warning(f"注册技能工具失败：{e}")
+            
             tools_count = len(self.tool_registry.tools) if hasattr(self.tool_registry, 'tools') else 0
             logger.info(f"✓ 工具注册表已初始化：{tools_count} 个工具")
             
