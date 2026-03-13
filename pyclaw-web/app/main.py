@@ -166,11 +166,12 @@ class PyClawGatewayClient:
             if self.token:
                 url = f"{self.gateway_url}?token={self.token}"
             
-            # 不配置 heartbeat，让 Gateway 服务器控制心跳
+            # 配置 heartbeat 让 aiohttp 自动响应 Gateway 的 ping
             # Gateway 配置：ping_interval=30, ping_timeout=20
-            # aiohttp 会自动响应 Gateway 的 ping
+            # aiohttp 的 heartbeat 参数会让客户端定期发送 ping，并自动响应服务器的 ping
             self.ws = await self.session.ws_connect(
                 url,
+                heartbeat=30,  # 每 30 秒发送 ping，同时自动响应服务器的 ping
                 receive_timeout=None,  # 不设置接收超时（由 Gateway 控制）
             )
             logger.info(f"WebSocket 已连接：{self.gateway_url}")
