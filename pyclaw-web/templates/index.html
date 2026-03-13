@@ -540,7 +540,7 @@
         async function selectSession(sessionId) {
             currentSessionId = sessionId;
             
-            // 加载会话详情
+            // 加载会话基本信息
             try {
                 const response = await fetch(`/api/sessions/${sessionId}`);
                 const data = await response.json();
@@ -549,13 +549,17 @@
                     currentMode = data.session.mode;
                     document.getElementById('modeSelect').value = currentMode;
                     
-                    // 加载历史消息
+                    // 清空消息区域（历史由 Gateway 管理，此处不显示）
                     const messagesContainer = document.getElementById('messagesContainer');
-                    messagesContainer.innerHTML = '';
-                    
-                    data.history.forEach(msg => {
-                        appendMessage(msg.role, msg.content, msg.timestamp);
-                    });
+                    messagesContainer.innerHTML = `
+                        <div class="message assistant">
+                            <div class="message-avatar">AI</div>
+                            <div class="message-content">
+                                会话已加载。历史消息由 Gateway 管理。
+                                <div class="message-time">刚刚</div>
+                            </div>
+                        </div>
+                    `;
                     
                     await loadSessions();
                 }

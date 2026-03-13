@@ -59,11 +59,10 @@ PYCLAW_GATEWAY_TOKEN = os.getenv("PYCLAW_GATEWAY_TOKEN", "")
 
 # 会话存储
 class SessionManager:
-    """会话管理器"""
+    """会话管理器（只管理会话元数据，不存储历史消息）"""
     
     def __init__(self):
         self.sessions: Dict[str, Dict[str, Any]] = {}
-        self.history: Dict[str, List[Dict[str, Any]]] = {}
     
     def create_session(self, session_id: str) -> Dict[str, Any]:
         """创建新会话"""
@@ -74,7 +73,6 @@ class SessionManager:
             "status": "active",
             "mode": "single",  # single | multi
         }
-        self.history[session_id] = []
         logger.info(f"创建会话：{session_id}")
         return self.sessions[session_id]
     
@@ -88,26 +86,6 @@ class SessionManager:
             self.sessions[session_id].update(kwargs)
             self.sessions[session_id]["last_active"] = datetime.now().isoformat()
     
-    def add_message(self, session_id: str, role: str, content: str, metadata: Optional[Dict] = None):
-        """添加消息到历史"""
-        if session_id not in self.history:
-            self.history[session_id] = []
-        
-        message = {
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat(),
-            "metadata": metadata or {},
-        }
-        self.history[session_id].append(message)
-        logger.debug(f"添加消息到 {session_id}: {role}")
-    
-    def get_history(self, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """获取历史消息"""
-        if session_id not in self.history:
-            return []
-        return self.history[session_id][-limit:]
-    
     def list_sessions(self) -> List[Dict[str, Any]]:
         """列出所有会话"""
         return list(self.sessions.values())
@@ -116,8 +94,6 @@ class SessionManager:
         """删除会话"""
         if session_id in self.sessions:
             del self.sessions[session_id]
-        if session_id in self.history:
-            del self.history[session_id]
         logger.info(f"删除会话：{session_id}")
 
 
@@ -306,17 +282,15 @@ async def list_sessions():
 
 @app.get("/api/sessions/{session_id}")
 async def get_session(session_id: str):
-    """获取会话详情"""
+    """获取会话基本信息（不含历史）"""
     session = session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
     
-    history = session_manager.get_history(session_id)
-    
     return {
         "success": True,
         "session": session,
-        "history": history,
+        # 历史消息由 Gateway 的 session manager 管理，此处不返回
     }
 
 
@@ -438,16 +412,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         logger.exception(f"WebSocket 错误：{e}")
 
 
-@app.get("/api/sessions/{session_id}/history")
-async def get_history(session_id: str, limit: int = 50):
-    """获取会话历史"""
-    history = session_manager.get_history(session_id, limit)
-    return {
-        "success": True,
-        "session_id": session_id,
-        "history": history,
-        "count": len(history),
-    }
+# 历史消息接口已移除 - 历史由 Gateway 的 session manager 统一管理
+# 如需获取历史，直接调用 Gateway 的 sessions.get 接口
 
 
 # ============================================================================
