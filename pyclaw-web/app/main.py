@@ -257,7 +257,11 @@ async def get_status():
     """获取系统状态"""
     # websockets 库会自动响应 Gateway 的 ping，保持连接稳定
     # 如果连接断开，会在下次请求时自动重连
-    is_connected = gateway_client.ws is not None and not gateway_client.ws.is_closing()
+    import websockets.connection
+    is_connected = (
+        gateway_client.ws is not None and 
+        gateway_client.ws.state == websockets.connection.State.OPEN
+    )
     return {
         "status": "online",
         "gateway_url": PYCLAW_GATEWAY_URL,
