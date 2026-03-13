@@ -348,68 +348,8 @@ async def chat(chat_msg: ChatMessage):
         )
 
 
-@app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    """WebSocket 实时通信"""
-    await websocket.accept()
-    
-    # 启用 WebSocket ping/pong（协议层心跳）
-    # 注意：FastAPI/WebSocket 不直接支持 ping_interval 配置
-    # 使用应用层心跳替代
-    
-    # 创建会话
-    session = session_manager.get_session(session_id)
-    if not session:
-        session = session_manager.create_session(session_id)
-    
-    logger.info(f"WebSocket 连接：{session_id}")
-    
-    try:
-        # 连接到 Gateway（会自动发送 connect 请求）
-        if not gateway_client.ws or gateway_client.ws.closed:
-            await gateway_client.connect()
-        
-        while True:
-            # 接收客户端消息（HTTP 请求通过 /api/chat 端点，这里只处理 WebSocket 消息）
-            data = await websocket.receive_json()
-            logger.debug(f"收到客户端消息：{data}")
-            
-            message = data.get("message", "")
-            mode = data.get("mode", "single")
-            
-            if not message:
-                logger.warning("消息为空，跳过")
-                continue
-            
-            logger.info(f"发送消息到 Gateway: session={session_id}, message={message[:50]}...")
-            
-            # 发送到 Gateway（Gateway 的 session manager 会自动维护历史）
-            try:
-                response = await gateway_client.send_message(
-                    session_id=session_id,
-                    message=message,
-                    mode=mode,
-                )
-                
-                logger.debug(f"Gateway 响应：{response}")
-                
-                # 转发响应给客户端
-                await websocket.send_json({
-                    "type": "response",
-                    "data": response,
-                })
-                
-            except Exception as e:
-                logger.error(f"Gateway 通信失败：{e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": str(e),
-                })
-    
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket 断开：{session_id}")
-    except Exception as e:
-        logger.exception(f"WebSocket 错误：{e}")
+# WebSocket 端点已移除 - 前端改用纯 HTTP 通信
+# 所有请求通过 /api/chat 端点处理
 
 
 # 历史消息接口已移除 - 历史由 Gateway 的 session manager 统一管理
