@@ -192,20 +192,30 @@ class PyClawGatewayClient:
         这个任务会忽略协议层的 ping/pong，只处理应用层消息。
         """
         try:
+            logger.debug("keepalive 接收任务启动")
             while self.ws and not self.ws.closed:
-                # 接收消息（包括协议层 ping，aiohttp 会自动响应 pong）
-                msg = await self.ws.receive()
+                try:
+                    # 接收消息（包括协议层 ping，aiohttp 会自动响应 pong）
+                    msg = await self.ws.receive(timeout=10.0)
+                    
+                    if msg.type == aiohttp.WSMsgType.CLOSED:
+                        logger.info("WebSocket 已关闭，停止 keepalive 接收")
+                        break
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        logger.warning(f"WebSocket 错误：{self.ws.exception()}")
+                        break
+                    elif msg.type == aiohttp.WSMsgType.PING:
+                        logger.debug("收到 PING，aiohttp 会自动回复 PONG")
+                    elif msg.type == aiohttp.WSMsgType.PONG:
+                        logger.debug("收到 PONG")
+                    # 其他消息类型由 aiohttp 自动处理
                 
-                if msg.type == aiohttp.WSMsgType.CLOSED:
-                    logger.debug("WebSocket 已关闭，停止 keepalive 接收")
-                    break
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    logger.warning(f"WebSocket 错误：{self.ws.exception()}")
-                    break
-                # 其他消息类型（PING/PONG/CLOSE）由 aiohttp 自动处理
+                except asyncio.TimeoutError:
+                    # 超时是正常的，继续循环
+                    pass
         
         except Exception as e:
-            logger.debug(f"keepalive 接收任务结束：{e}")
+            logger.warning(f"keepalive 接收任务结束：{e}")
     
     async def disconnect(self):
         """断开连接"""
@@ -292,7 +302,16 @@ async def root(request: Request):
 
 @app.get("/api/status")
 async def get_status():
-    """获取系统状态"""
+    """获取系统状态（自动重连 Gateway）"""
+    # 如果 Gateway 连接断开，尝试重连
+    if not gateway_client.ws or gateway_client.ws.closed:
+        try:
+            logger.info("检测到 Gateway 连接断开，尝试重连...")
+            await gateway_client.connect()
+            logger.info("✅ Gateway 重连成功")
+        except Exception as e:
+            logger.warning(f"⚠️ Gateway 重连失败：{e}")
+    
     return {
         "status": "online",
         "gateway_url": PYCLAW_GATEWAY_URL,
