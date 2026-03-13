@@ -411,37 +411,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             await gateway_client.connect()
         
         while True:
-            # 接收客户端消息
+            # 接收客户端消息（HTTP 请求通过 /api/chat 端点，这里只处理 WebSocket 消息）
             data = await websocket.receive_json()
             logger.debug(f"收到客户端消息：{data}")
-            
-            # 处理应用层心跳
-            if data.get("type") == "heartbeat":
-                logger.info(f"❤️ 收到前端应用层心跳：{data}")
-                
-                # 回复前端
-                await websocket.send_json({
-                    "type": "heartbeat",
-                    "timestamp": datetime.now().isoformat(),
-                    "status": "ok",
-                })
-                logger.info("❤️ 已回复前端应用层心跳")
-                
-                # 同时向 Gateway 发送心跳（保持 Gateway 连接活跃）
-                if gateway_client.ws and not gateway_client.ws.closed:
-                    try:
-                        heartbeat_request = {
-                            "type": "req",
-                            "id": str(uuid.uuid4()),
-                            "method": "heartbeat",
-                            "params": {},
-                        }
-                        await gateway_client.ws.send_json(heartbeat_request)
-                        logger.debug("❤️ 向 Gateway 发送心跳")
-                    except Exception as e:
-                        logger.warning(f"⚠️ 向 Gateway 发送心跳失败：{e}")
-                
-                continue
             
             message = data.get("message", "")
             mode = data.get("mode", "single")
