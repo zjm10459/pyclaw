@@ -41,6 +41,7 @@
     "top_k": 5,
     "embedding_model": "BAAI/bge-small-zh-v1.5",
     "embedding_model_path": null,  // 本地模型路径（可选），如 "/home/user/models/bge-small-zh-v1.5"
+    "offline_mode": false,  // 是否禁用网络检查（true=完全离线）
     "vector_store": "memory",
     
     "retrieval_method": "hybrid",

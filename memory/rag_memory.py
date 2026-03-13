@@ -20,6 +20,11 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from dataclasses import dataclass, field
 
+# 启用离线模式（避免启动时连接 HuggingFace 检查更新）
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["HF_EVALUATE_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 logger = logging.getLogger("pyclaw.rag_memory")
 
 # 导入高级检索模块
