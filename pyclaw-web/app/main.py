@@ -27,7 +27,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-import aiohttp
+import websockets
+from websockets.asyncio.client import ClientConnection
 
 # 配置
 from dotenv import load_dotenv
@@ -126,29 +127,30 @@ class ChatResponse(BaseModel):
 # ============================================================================
 
 class PyClawGatewayClient:
-    """PyClaw Gateway WebSocket 客户端"""
+    """PyClaw Gateway WebSocket 客户端（使用 websockets 库）"""
     
     def __init__(self, gateway_url: str, token: str = ""):
         self.gateway_url = gateway_url
         self.token = token
-        self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
-        self.session = None
+        self.ws: Optional[ClientConnection] = None
     
     async def connect(self):
         """连接到 Gateway"""
         try:
-            self.session = aiohttp.ClientSession()
             url = self.gateway_url
             if self.token:
                 url = f"{self.gateway_url}?token={self.token}"
             
-            # 配置 heartbeat 让 aiohttp 定期发送 ping
-            # 注意：aiohttp 的 heartbeat 不自动响应服务器的 ping
-            # 解决方案：在 /api/status 端点中检测断开并自动重连
-            self.ws = await self.session.ws_connect(
+            # 使用 websockets 库连接
+            # websockets 会自动响应服务器的 ping，无需手动处理
+            # ping_interval: 客户端定期发送 ping 的间隔（设为 0 禁用）
+            # ping_timeout: 等待 pong 的超时时间
+            # 注意：作为客户端，我们主要依赖服务器端的 ping，让服务器控制心跳
+            self.ws = await websockets.connect(
                 url,
-                heartbeat=10,  # 每 10 秒发送 ping（比 Gateway 的 ping_interval 更频繁）
-                receive_timeout=None,  # 不设置接收超时
+                ping_interval=None,  # 不主动发送 ping，让 Gateway 服务器控制
+                ping_timeout=20,     # 等待 pong 的超时（与 Gateway 的 ping_timeout 匹配）
+                close_timeout=10,    # 关闭连接的超时
             )
             logger.info(f"WebSocket 已连接：{self.gateway_url}")
             
@@ -167,10 +169,10 @@ class PyClawGatewayClient:
                     },
                 },
             }
-            await self.ws.send_json(connect_request)
+            await self.ws.send(json.dumps(connect_request))
             
             # 等待 connect 响应
-            connect_response = await asyncio.wait_for(self.ws.receive_json(), timeout=10.0)
+            connect_response = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=10.0))
             if connect_response.get("type") == "res" and connect_response.get("ok"):
                 logger.info("✓ Gateway 连接成功")
             else:
@@ -184,8 +186,6 @@ class PyClawGatewayClient:
         """断开连接"""
         if self.ws:
             await self.ws.close()
-        if self.session:
-            await self.session.close()
         logger.info("已断开 Gateway 连接")
     
     async def send_message(self, session_id: str, message: str, mode: str = "single") -> Dict[str, Any]:
@@ -206,12 +206,12 @@ class PyClawGatewayClient:
         }
         
         # 发送
-        await self.ws.send_json(request)
+        await self.ws.send(json.dumps(request))
         logger.debug(f"发送消息到 Gateway: {message[:50]}...")
         
         # 等待响应
         try:
-            response = await asyncio.wait_for(self.ws.receive_json(), timeout=120.0)
+            response = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=120.0))
             # 解析响应
             if response.get("type") == "res":
                 if response.get("ok"):
@@ -233,17 +233,6 @@ class PyClawGatewayClient:
                 "error": "请求超时",
                 "session_id": session_id,
             }
-    
-    async def stream_messages(self, session_id: str):
-        """流式接收消息"""
-        if not self.ws:
-            await self.connect()
-        
-        async for msg in self.ws:
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                yield json.loads(msg.data)
-            elif msg.type == aiohttp.WSMsgType.ERROR:
-                break
 
 
 # Gateway 客户端单例
@@ -265,16 +254,9 @@ async def root(request: Request):
 
 @app.get("/api/status")
 async def get_status():
-    """获取系统状态（自动重连 Gateway）"""
-    # 如果 Gateway 连接断开，尝试重连
-    if not gateway_client.ws or gateway_client.ws.closed:
-        try:
-            logger.info("检测到 Gateway 连接断开，尝试重连...")
-            await gateway_client.connect()
-            logger.info("✅ Gateway 重连成功")
-        except Exception as e:
-            logger.warning(f"⚠️ Gateway 重连失败：{e}")
-    
+    """获取系统状态"""
+    # websockets 库会自动响应 Gateway 的 ping，保持连接稳定
+    # 如果连接断开，会在下次请求时自动重连
     return {
         "status": "online",
         "gateway_url": PYCLAW_GATEWAY_URL,
