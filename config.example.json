@@ -15,7 +15,7 @@
   "providers": {
     "bailian": {
       "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_key": "sk-sp-1449eadf40684bd087a87a8d2532eb1a"
+      "api_key": "xxx"
     }
   },
   
