@@ -66,6 +66,7 @@ dependencies = [
     # 网页工具
     "beautifulsoup4>=4.12.0",
     "pytest>=9.0.2",
+    "fastapi[all]>=0.135.1",
 ]
 
 [project.optional-dependencies]
