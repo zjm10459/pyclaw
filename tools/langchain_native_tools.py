@@ -5,6 +5,15 @@ LangChain 原生工具实现
 
 使用 LangChain 的 @tool 装饰器简化实现。
 参考：https://python.langchain.com/docs/how_to/custom_tools/
+
+注意：LangChain 社区已提供完整的文件操作工具，无需重复实现：
+- ReadFileTool: 读取文件
+- WriteFileTool: 写入文件
+- CopyFileTool: 复制文件
+- MoveFileTool: 移动/重命名文件
+- DeleteFileTool: 删除文件
+- ListDirectoryTool: 列出目录
+- FileSearchTool: 搜索文件
 """
 
 from datetime import datetime
@@ -57,51 +66,20 @@ def get_time_info(format: Optional[str] = None) -> str:
     return datetime.now().strftime(format)
 
 
-# ========== 文件操作工具 ==========
-
-@tool
-def read_file(path: str) -> str:
-    """
-    读取文件内容
-    
-    参数:
-        path: 文件路径
-    
-    返回:
-        文件内容
-    """
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except Exception as e:
-        return f"读取失败：{e}"
-
-
-@tool
-def write_file(path: str, content: str) -> str:
-    """
-    写入文件内容
-    
-    参数:
-        path: 文件路径
-        content: 要写入的内容
-    
-    返回:
-        操作结果
-    """
-    try:
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        return f"✓ 文件已写入：{path}"
-    except Exception as e:
-        return f"写入失败：{e}"
-
-
 # ========== 注册所有工具 ==========
 
 def get_all_tools():
     """
     获取所有 LangChain 原生工具
+    
+    注意：文件操作工具已使用 LangChain 社区提供的工具：
+    - ReadFileTool
+    - WriteFileTool
+    - CopyFileTool
+    - MoveFileTool
+    - DeleteFileTool
+    - ListDirectoryTool
+    - FileSearchTool
     
     返回:
         工具列表
@@ -110,8 +88,8 @@ def get_all_tools():
         get_current_time,
         echo,
         get_time_info,
-        read_file,
-        write_file,
+        # 文件操作工具使用 LangChain 社区提供的工具
+        # 在 langgraph_agent.py 中会自动加载
     ]
 
 

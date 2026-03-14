@@ -328,7 +328,7 @@ class LangGraphAgent:
         """
         初始化工具（简化版）
         
-        使用 LangChain 原生工具和 PyClaw 工具混合模式。
+        使用 LangChain 原生工具和社区工具。
         """
         langchain_tools = []
         
@@ -341,13 +341,38 @@ class LangGraphAgent:
         except ImportError as e:
             logger.debug(f"LangChain 原生工具未可用：{e}")
         
-        # 2. 添加 PyClaw 自定义工具（兼容现有）
+        # 2. 添加 LangChain 社区文件工具
+        try:
+            from langchain_community.tools.file_management import (
+                ReadFileTool,
+                WriteFileTool,
+                CopyFileTool,
+                MoveFileTool,
+                DeleteFileTool,
+                ListDirectoryTool,
+                FileSearchTool,
+            )
+            
+            file_tools = [
+                ReadFileTool(),
+                WriteFileTool(),
+                CopyFileTool(),
+                MoveFileTool(),
+                DeleteFileTool(),
+                ListDirectoryTool(),
+                FileSearchTool(),
+            ]
+            langchain_tools.extend(file_tools)
+            logger.info(f"✓ LangChain 文件工具：{len(file_tools)} 个")
+        except ImportError as e:
+            logger.debug(f"LangChain 文件工具未可用：{e}")
+        
+        # 3. 添加 PyClaw 自定义工具（兼容现有）
         if self.tool_registry and self.tool_registry.tools:
             for tool_name, tool_def in self.tool_registry.tools.items():
                 try:
                     # 简化转换逻辑
                     if hasattr(tool_def, 'function'):
-                        # 直接使用 function，让 LangChain 自动推断 schema
                         langchain_tool = StructuredTool.from_function(
                             func=tool_def.function,
                             name=tool_def.name,
@@ -357,7 +382,6 @@ class LangGraphAgent:
                         logger.debug(f"✓ 工具：{tool_name}")
                     
                     elif hasattr(tool_def, '_run'):
-                        # LangChain 工具对象
                         langchain_tool = StructuredTool.from_function(
                             func=tool_def._run,
                             name=getattr(tool_def, 'name', tool_name),
