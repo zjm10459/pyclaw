@@ -466,11 +466,13 @@ class GatewayRunner:
                 workspace_path=workspace_path,
             )
             
-            # 为每个 Agent 注入技能加载器
+            # 为多 Agent 系统和每个 Agent 注入技能加载器
+            self.multi_agent_system.skill_loader = self.skill_loader
             for agent in self.multi_agent_system.agents.values():
                 agent.skill_loader = self.skill_loader
             
             logger.info(f"✓ 多 Agent 协作系统已初始化：{len(self.multi_agent_system.agents)} 个 Agent")
+            logger.info(f"  技能加载器：{'✓ 已注入' if self.multi_agent_system.skill_loader else '✗ 未注入'}")
             logger.info(f"  启用的角色：{', '.join([r.value for r in enabled_roles])}")
         
         except Exception as e:

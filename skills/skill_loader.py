@@ -34,10 +34,21 @@ import json
 import logging
 import shutil
 import platform
+import asyncio
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Callable
 from dataclasses import dataclass, field
 import yaml
+
+# 可选导入 watchdog（用于文件监控）
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler, DirCreatedEvent, DirDeletedEvent
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
+    Observer = None
+    FileSystemEventHandler = None
 
 logger = logging.getLogger("pyclaw.skills")
 
@@ -170,13 +181,25 @@ class SkillLoader:
         self.os_arch = platform.machine()
         
         logger.info(f"技能加载器初始化：操作系统={self.os_name}, 架构={self.os_arch}")
+        logger.debug(f"工作区路径：{self.workspace}")
+        logger.debug(f"工作区绝对路径：{self.workspace.resolve()}")
         
         # 技能加载位置（优先级从高到低）
         self.skill_dirs = [
-            self.workspace / "skills",  # 工作区技能（最高优先级）
-            Path.home() / ".pyclaw" / "skills",  # 管理技能
+            self.workspace / "skills",  # 工作区技能（最高优先级）- 代码模块
+            self.workspace / "skills-installed",  # 安装的技能（第二优先级）- 在工作区目录下 ✅
+            Path.home() / ".pyclaw" / "skills-installed",  # 管理技能（第三优先级）
             Path.home() / ".pyclaw" / "bundled-skills",  # 捆绑技能（最低优先级）
         ]
+        
+        # 调试输出
+        for i, skill_dir in enumerate(self.skill_dirs):
+            exists = skill_dir.exists()
+            if exists:
+                skill_count = sum(1 for p in skill_dir.iterdir() if p.is_dir() and (p / "SKILL.md").exists())
+                logger.debug(f"技能目录 {i+1}: {skill_dir} (存在：{exists}, 技能数：{skill_count})")
+            else:
+                logger.debug(f"技能目录 {i+1}: {skill_dir} (存在：{exists})")
         
         # 已加载的技能
         self.skills: Dict[str, Skill] = {}
@@ -185,6 +208,8 @@ class SkillLoader:
         self._load_all_skills()
         
         logger.info(f"技能加载完成：{len(self.skills)} 个技能可用")
+        if self.skills:
+            logger.debug(f"技能列表：{', '.join(self.skills.keys())}")
     
     def _load_all_skills(self):
         """从所有位置加载技能"""
@@ -485,6 +510,199 @@ class SkillLoader:
         self.skills.clear()
         self._load_all_skills()
         logger.info(f"技能重新加载完成：{len(self.skills)} 个技能")
+    
+    def reload_skill(self, skill_name: str) -> bool:
+        """
+        热插拔单个技能
+        
+        参数:
+            skill_name: 技能名称
+        
+        返回:
+            True（成功）或 False（失败）
+        """
+        # 查找技能
+        skill = self.skills.get(skill_name)
+        if not skill:
+            logger.warning(f"技能不存在：{skill_name}")
+            return False
+        
+        # 重新加载技能
+        try:
+            skill_path = skill.path
+            skill_md = skill_path / "SKILL.md"
+            
+            if not skill_md.exists():
+                logger.error(f"SKILL.md 不存在：{skill_md}")
+                return False
+            
+            # 重新解析
+            content = skill_md.read_text(encoding='utf-8')
+            frontmatter, instructions = self._parse_frontmatter(content)
+            
+            # 更新元数据
+            skill.metadata = SkillMetadata.from_frontmatter(frontmatter)
+            skill._content = content
+            skill._instructions = instructions
+            skill._loaded = True
+            
+            # 检查 gating
+            if self._check_gating(skill):
+                logger.info(f"✓ 技能热更新成功：{skill_name}")
+                return True
+            else:
+                logger.warning(f"⚠ 技能未通过 gating：{skill_name}")
+                return False
+        
+        except Exception as e:
+            logger.error(f"技能热更新失败 {skill_name}: {e}")
+            return False
+    
+    def add_skill(self, skill_path: Path) -> bool:
+        """
+        动态添加技能（热插拔）
+        
+        参数:
+            skill_path: 技能目录路径
+        
+        返回:
+            True（成功）或 False（失败）
+        """
+        skill_md = skill_path / "SKILL.md"
+        if not skill_md.exists():
+            logger.warning(f"SKILL.md 不存在：{skill_md}")
+            return False
+        
+        try:
+            skill = self._load_skill(skill_path, skill_md)
+            
+            if self._check_gating(skill):
+                self.skills[skill.name] = skill
+                logger.info(f"✓ 技能已添加：{skill.name}")
+                return True
+            else:
+                logger.warning(f"⚠ 技能未通过 gating：{skill.name}")
+                return False
+        
+        except Exception as e:
+            logger.error(f"添加技能失败 {skill_path}: {e}")
+            return False
+    
+    def remove_skill(self, skill_name: str) -> bool:
+        """
+        移除技能（热插拔）
+        
+        参数:
+            skill_name: 技能名称
+        
+        返回:
+            True（成功）或 False（失败）
+        """
+        if skill_name in self.skills:
+            del self.skills[skill_name]
+            logger.info(f"✓ 技能已移除：{skill_name}")
+            return True
+        else:
+            logger.warning(f"技能不存在：{skill_name}")
+            return False
+
+
+# 文件监控处理器
+class SkillFileHandler(FileSystemEventHandler if WATCHDOG_AVAILABLE else object):
+    """技能文件变化处理器"""
+    
+    def __init__(self, loader: SkillLoader, callback: Optional[Callable] = None):
+        self.loader = loader
+        self.callback = callback  # 回调函数（技能变化时调用）
+    
+    def on_created(self, event):
+        """文件或目录创建"""
+        if event.is_directory:
+            skill_path = Path(event.src_path)
+            if (skill_path / "SKILL.md").exists():
+                logger.info(f"检测到新技能：{skill_path.name}")
+                if self.loader.add_skill(skill_path):
+                    if self.callback:
+                        self.callback("add", skill_path.name)
+    
+    def on_deleted(self, event):
+        """文件或目录删除"""
+        if event.is_directory:
+            skill_name = Path(event.src_path).name
+            logger.info(f"检测到技能删除：{skill_name}")
+            if self.loader.remove_skill(skill_name):
+                if self.callback:
+                    self.callback("remove", skill_name)
+    
+    def on_modified(self, event):
+        """文件修改"""
+        if event.src_path.endswith("SKILL.md"):
+            skill_path = Path(event.src_path).parent
+            skill_name = skill_path.name
+            logger.info(f"检测到技能修改：{skill_name}")
+            if self.loader.reload_skill(skill_name):
+                if self.callback:
+                    self.callback("reload", skill_name)
+
+
+class SkillWatcher:
+    """技能监控器（支持热插拔）"""
+    
+    def __init__(self, loader: SkillLoader, callback: Optional[Callable] = None):
+        """
+        初始化技能监控器
+        
+        参数:
+            loader: SkillLoader 实例
+            callback: 回调函数（技能变化时调用）
+        """
+        self.loader = loader
+        self.callback = callback
+        self.observer: Optional[Observer] = None
+        self.running = False
+    
+    def start(self):
+        """启动监控"""
+        if not WATCHDOG_AVAILABLE:
+            logger.warning("watchdog 未安装，技能热插拔功能不可用")
+            logger.info("安装：pip install watchdog")
+            return False
+        
+        try:
+            self.observer = Observer()
+            handler = SkillFileHandler(self.loader, self.callback)
+            
+            # 监控所有技能目录
+            for skill_dir in self.loader.skill_dirs:
+                if skill_dir.exists():
+                    self.observer.schedule(handler, str(skill_dir), recursive=False)
+                    logger.info(f"开始监控技能目录：{skill_dir}")
+            
+            self.observer.start()
+            self.running = True
+            logger.info("✓ 技能监控已启动")
+            return True
+        
+        except Exception as e:
+            logger.error(f"启动技能监控失败：{e}")
+            return False
+    
+    def stop(self):
+        """停止监控"""
+        if self.observer:
+            self.observer.stop()
+            self.observer.join()
+            self.running = False
+            logger.info("技能监控已停止")
+    
+    def __enter__(self):
+        """上下文管理器"""
+        self.start()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器"""
+        self.stop()
 
 
 # 全局实例

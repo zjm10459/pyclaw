@@ -98,3 +98,5 @@ docs/.doctrees/
 # *.pkl
 # data/
 config.json
+skills-installed/*
+memory_chat/*.md

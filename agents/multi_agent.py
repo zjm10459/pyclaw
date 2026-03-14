@@ -266,6 +266,7 @@ class MultiAgentCollaboration:
         
         self.tool_registry = tool_registry
         self.workspace_path = workspace_path
+        self.skill_loader = None  # 由 main.py 注入
         
         # Agent 实例缓存
         self.agents: Dict[AgentRole, LangGraphAgent] = {}
@@ -373,6 +374,7 @@ class MultiAgentCollaboration:
                     config=config,
                     tool_registry=self.tool_registry,
                     workspace_path=self.workspace_path,
+                    skill_loader=None,  # 稍后由 main.py 注入
                 )
                 
                 self.agents[role] = agent
@@ -473,11 +475,20 @@ class MultiAgentCollaboration:
             
             # 3. 可用技能（Skills）
             skills_context = ""
+            
+            # 尝试从 supervisor 或 self 获取 skill_loader
+            skill_loader = None
             if hasattr(supervisor, 'skill_loader') and supervisor.skill_loader:
+                skill_loader = supervisor.skill_loader
+            elif hasattr(self, 'skill_loader') and self.skill_loader:
+                skill_loader = self.skill_loader
+            
+            if skill_loader:
                 try:
-                    skills_prompt = supervisor.skill_loader.get_skills_prompt(include_full_instructions=False)
+                    skills_prompt = skill_loader.get_skills_prompt(include_full_instructions=False)
                     if skills_prompt:
                         skills_context = "\n\n可用技能：\n" + skills_prompt[:1000]  # 限制长度
+                        logger.debug(f"注入技能信息：{len(skills_prompt)} 字符")
                 except Exception as e:
                     logger.debug(f"获取技能信息失败：{e}")
             

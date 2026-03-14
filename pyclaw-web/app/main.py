@@ -134,9 +134,13 @@ class PyClawGatewayClient:
         self.gateway_url = gateway_url
         self.token = token
         self.ws: Optional[ClientConnection] = None
+        self.connected = False
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 5
+        self.reconnect_delay = 5  # 重连延迟（秒）
     
     async def connect(self):
-        """连接到 Gateway"""
+        """连接到 Gateway（支持自动重连）"""
         try:
             url = self.gateway_url
             if self.token:
@@ -176,23 +180,82 @@ class PyClawGatewayClient:
             connect_response = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=10.0))
             if connect_response.get("type") == "res" and connect_response.get("ok"):
                 logger.info("✓ Gateway 连接成功")
+                self.connected = True
+                self.reconnect_attempts = 0  # 重置重连计数
             else:
                 logger.warning(f"⚠ Gateway 连接响应：{connect_response}")
+                self.connected = False
             
         except Exception as e:
             logger.error(f"连接 Gateway 失败：{e}")
+            self.connected = False
             raise
+    
+    async def reconnect(self):
+        """断连重连（带重试机制）"""
+        if self.connected:
+            return  # 已连接，无需重连
+        
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            logger.error(f"重连失败：已达到最大重试次数 ({self.max_reconnect_attempts})")
+            return False
+        
+        self.reconnect_attempts += 1
+        logger.info(f"尝试重连 Gateway ({self.reconnect_attempts}/{self.max_reconnect_attempts})...")
+        
+        try:
+            # 关闭旧连接
+            if self.ws:
+                await self.ws.close()
+            
+            # 延迟后重连
+            await asyncio.sleep(self.reconnect_delay)
+            
+            # 尝试连接
+            await self.connect()
+            
+            logger.info(f"✓ 重连成功")
+            return True
+            
+        except Exception as e:
+            logger.error(f"重连失败：{e}")
+            return False
     
     async def disconnect(self):
         """断开连接"""
+        self.connected = False
         if self.ws:
             await self.ws.close()
         logger.info("已断开 Gateway 连接")
     
+    async def ensure_connected(self):
+        """确保连接（如果断开则重连）"""
+        if not self.connected:
+            logger.info("检测到连接断开，尝试重连...")
+            return await self.reconnect()
+        
+        # 检查 WebSocket 状态
+        try:
+            import websockets.connection
+            if self.ws and self.ws.state != websockets.connection.State.OPEN:
+                logger.warning("WebSocket 状态异常，尝试重连...")
+                self.connected = False
+                return await self.reconnect()
+        except Exception as e:
+            logger.debug(f"检查连接状态失败：{e}")
+        
+        return True
+    
     async def send_message(self, session_id: str, message: str, mode: str = "single") -> Dict[str, Any]:
-        """发送消息到 Gateway"""
-        if not self.ws:
-            await self.connect()
+        """发送消息到 Gateway（支持断连重连）"""
+        # 确保连接正常
+        connected = await self.ensure_connected()
+        if not connected:
+            return {
+                "success": False,
+                "error": "无法连接到 Gateway，请稍后重试",
+                "session_id": session_id,
+            }
         
         # 构建请求（使用 Gateway 协议格式）
         request = {
@@ -207,8 +270,23 @@ class PyClawGatewayClient:
         }
         
         # 发送
-        await self.ws.send(json.dumps(request))
-        logger.debug(f"发送消息到 Gateway: {message[:50]}...")
+        try:
+            await self.ws.send(json.dumps(request))
+            logger.debug(f"发送消息到 Gateway: {message[:50]}...")
+        except Exception as e:
+            logger.error(f"发送消息失败：{e}")
+            # 尝试重连
+            connected = await self.reconnect()
+            if connected and self.ws:
+                # 重连后重试
+                await self.ws.send(json.dumps(request))
+                logger.info("重连后消息发送成功")
+            else:
+                return {
+                    "success": False,
+                    "error": f"发送失败：{str(e)}",
+                    "session_id": session_id,
+                }
         
         # 等待响应
         try:
