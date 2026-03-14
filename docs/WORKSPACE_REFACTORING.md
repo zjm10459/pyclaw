@@ -28,8 +28,8 @@ pyclaw/                          # 项目根目录
 
 ```
 pyclaw/                          # 项目根目录
-├── workspace/                   # ✅ 新建工作区
-│   ├── skills/                  # 技能代码模块
+├── skills/                      # ✅ 技能代码模块（开发用）
+├── workspace/                   # ✅ 工作区
 │   ├── skills-installed/        # 安装的技能
 │   ├── memory/                  # 记忆文件
 │   │   ├── YYYY-MM-DD.md        # 每日记忆
@@ -56,8 +56,10 @@ pyclaw/                          # 项目根目录
 ### 1. 移动文件
 
 **移动到新工作区：**
-- ✅ `skills/` → `workspace/skills/`
 - ✅ `skills-installed/` → `workspace/skills-installed/`
+
+**移动到项目根目录：**
+- ✅ `skills/` → `skills/`（保持不变，仍在根目录）
 - ✅ `memory/*.md` → `workspace/memory/`
 - ✅ `长期记忆.md` → `workspace/长期记忆.md`
 - ✅ `config.json` → `workspace/config.json`

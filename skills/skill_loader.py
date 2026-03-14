@@ -186,7 +186,7 @@ class SkillLoader:
         
         # 技能加载位置（优先级从高到低）
         self.skill_dirs = [
-            self.workspace / "skills",  # 工作区技能（最高优先级）- 代码模块
+            self.workspace.parent / "skills",  # 项目根目录技能（最高优先级）- 代码模块
             self.workspace / "skills-installed",  # 安装的技能（第二优先级）- 在工作区目录下 ✅
             Path.home() / ".pyclaw" / "skills-installed",  # 管理技能（第三优先级）
             Path.home() / ".pyclaw" / "bundled-skills",  # 捆绑技能（最低优先级）

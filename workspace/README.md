@@ -3,11 +3,12 @@
 ## 📁 目录结构
 
 ```
-workspace/
-├── skills/                  # 技能代码模块（开发用）
+pyclaw/                          # 项目根目录
+├── skills/                      # 技能代码模块（开发用）
 │   └── (空目录)
 │
-├── skills-installed/        # 安装的技能
+└── workspace/                   # 工作区
+    ├── skills-installed/        # 安装的技能
 │   ├── context7/
 │   ├── email-sender/
 │   ├── github/
@@ -35,10 +36,10 @@ workspace/
 
 ### 技能相关
 
-| 目录 | 用途 |
-|------|------|
-| **skills/** | 技能代码模块（开发自定义技能） |
-| **skills-installed/** | 安装的技能（从 ClawHub 或手动安装） |
+| 目录 | 用途 | 位置 |
+|------|------|------|
+| **skills/** | 技能代码模块（开发自定义技能） | 项目根目录 |
+| **skills-installed/** | 安装的技能（从 ClawHub 或手动安装） | workspace/ |
 
 ### 记忆相关
 
@@ -65,7 +66,8 @@ workspace/
 ### 添加自定义技能
 
 ```bash
-cd workspace/skills
+cd ..  # 返回项目根目录
+cd skills
 mkdir my-skill
 cd my-skill
 # 创建 SKILL.md 和技能代码
@@ -92,6 +94,7 @@ vim USER.md
 ## 📊 路径说明
 
 **工作区路径：** `/home/zjm/.openclaw/workspace/pyclaw/workspace`
+**技能代码路径：** `/home/zjm/.openclaw/workspace/pyclaw/skills`
 
 **代码中引用：**
 ```python
@@ -100,8 +103,8 @@ from pathlib import Path
 # 工作区路径
 workspace_path = Path(__file__).parent / "workspace"
 
-# 技能目录
-skills_dir = workspace_path / "skills"
+# 技能目录（在项目根目录）
+skills_dir = Path(__file__).parent / "skills"
 skills_installed = workspace_path / "skills-installed"
 
 # 记忆目录
