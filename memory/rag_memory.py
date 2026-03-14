@@ -205,9 +205,14 @@ class RAGMemory:
         """初始化嵌入模型"""
         if self.config.enable_vector_search:
             try:
+                # 可选依赖：sentence-transformers
                 from sentence_transformers import SentenceTransformer
                 self.embeddings = SentenceTransformer(self.config.embedding_model)
                 logger.info(f"✓ 向量模型：{self.config.embedding_model}")
+            except ImportError:
+                logger.warning("⚠ sentence-transformers 未安装，向量搜索不可用")
+                logger.info("提示：pip install sentence-transformers")
+                self.embeddings = None
             except Exception as e:
                 logger.warning(f"⚠ 向量模型加载失败：{e}")
                 self.embeddings = None

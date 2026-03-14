@@ -98,5 +98,6 @@ docs/.doctrees/
 # *.pkl
 # data/
 config.json
+config.multi-agent-fast.json
 skills-installed/*
-memory_chat/*.md
+memory_chat
