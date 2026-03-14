@@ -61,9 +61,9 @@ logger = logging.getLogger("pyclaw.langgraph_agent")
 class AgentState(TypedDict):
     """
     LangGraph Agent 状态
-    
+
     使用 TypedDict 定义，LangGraph 会自动管理消息累加。
-    
+
     属性:
         messages: 消息列表 (自动累加)
         system_prompt: 系统提示词
@@ -86,7 +86,7 @@ class AgentState(TypedDict):
 class LangGraphAgentConfig:
     """
     Agent 配置
-    
+
     属性:
         name: Agent 名称
         model: 模型名称 (支持 "provider:model" 格式)
@@ -113,7 +113,7 @@ class LangGraphAgentConfig:
 class LangGraphAgent:
     """
     基于 LangGraph 的 Agent 编排系统
-    
+
     核心流程：
         1. 接收用户消息
         2. Agent 决定是否调用工具
@@ -121,7 +121,7 @@ class LangGraphAgent:
         4. 返回 Agent 继续处理
         5. 循环直到任务完成
         6. 回复用户
-    
+
     架构图:
         START → agent_node → should_continue?
                               ↓
@@ -140,7 +140,7 @@ class LangGraphAgent:
     ):
         """
         初始化 LangGraph Agent
-        
+
         参数:
             config: Agent 配置
             tool_registry: 工具注册表
@@ -177,7 +177,7 @@ class LangGraphAgent:
     def _init_llm(self):
         """
         初始化 LLM
-        
+
         使用 LangChain 1.2+ 的 init_chat_model。
         """
         try:
@@ -295,7 +295,7 @@ class LangGraphAgent:
     def _load_provider_config(self) -> Dict[str, Any]:
         """
         加载 Provider 配置文件
-        
+
         返回:
             Provider 配置字典
         """
@@ -326,100 +326,63 @@ class LangGraphAgent:
 
     def _init_tools(self):
         """
-        初始化工具
+        初始化工具（简化版）
         
-        将 PyClaw 工具转换为 LangChain StructuredTool 格式。
-        注意：工具注册表由 main.py 初始化，这里只做转换。
+        使用 LangChain 原生工具和 PyClaw 工具混合模式。
         """
         langchain_tools = []
-
-        if not self.tool_registry or not self.tool_registry.tools:
-            logger.info("ℹ 未配置工具注册表，跳过工具初始化")
-            self.tools = []
-            return
-
-        for tool_name, tool_def in self.tool_registry.tools.items():
-            try:
-                # 检查是否是 ToolDefinition 对象
-                if hasattr(tool_def, 'function'):
-                    # ToolDefinition 对象，使用 function 属性
-                    # 从 parameters 创建 Pydantic schema
-                    args_schema = None
-                    if hasattr(tool_def, 'parameters') and tool_def.parameters:
-                        try:
-                            from pydantic import BaseModel, create_model
-
-                            # 从 JSON Schema 创建 Pydantic model
-                            params = tool_def.parameters.get('properties', {})
-                            required = tool_def.parameters.get('required', [])
-
-                            # 构建字段定义
-                            field_definitions = {}
-                            for param_name, param_info in params.items():
-                                param_type = param_info.get('type', 'str')
-                                param_desc = param_info.get('description', '')
-                                default = ... if param_name in required else None
-
-                                # 类型映射
-                                type_map = {
-                                    'string': str,
-                                    'integer': int,
-                                    'number': float,
-                                    'boolean': bool,
-                                    'array': list,
-                                    'object': dict,
-                                }
-                                python_type = type_map.get(param_type, str)
-
-                                field_definitions[param_name] = (python_type, default)
-
-                            # 创建动态 model
-                            if field_definitions:
-                                args_schema = create_model(
-                                    f"{tool_def.name.title()}Schema",
-                                    **field_definitions,
-                                    __doc__=tool_def.description,
-                                )
-                        except Exception as e:
-                            logger.debug(f"创建 args_schema 失败 {tool_name}: {e}")
-
-                    langchain_tool = StructuredTool(
-                        name=tool_def.name,
-                        description=tool_def.description,
-                        func=tool_def.function,
-                        args_schema=args_schema,
-                    )
-                elif hasattr(tool_def, '_run'):
-                    # LangChain 工具对象（如 RequestsGetTool, ReadFileTool 等）
-                    # 使用 _run 方法作为入口
-                    langchain_tool = StructuredTool(
-                        name=getattr(tool_def, 'name', tool_name),
-                        description=getattr(tool_def, 'description', ''),
-                        func=tool_def._run,
-                        args_schema=getattr(tool_def, 'args_schema', None),
-                    )
-                else:
-                    logger.warning(f"⚠ 未知工具类型：{tool_name}")
-                    continue
-
-                langchain_tools.append(langchain_tool)
-                logger.debug(f"工具转换成功：{tool_name}")
-            except Exception as e:
-                logger.error(f"工具转换失败 {tool_name}: {e}")
-
+        
+        # 1. 添加 LangChain 原生工具
+        try:
+            from tools.langchain_native_tools import get_all_tools
+            native_tools = get_all_tools()
+            langchain_tools.extend(native_tools)
+            logger.info(f"✓ LangChain 原生工具：{len(native_tools)} 个")
+        except ImportError as e:
+            logger.debug(f"LangChain 原生工具未可用：{e}")
+        
+        # 2. 添加 PyClaw 自定义工具（兼容现有）
+        if self.tool_registry and self.tool_registry.tools:
+            for tool_name, tool_def in self.tool_registry.tools.items():
+                try:
+                    # 简化转换逻辑
+                    if hasattr(tool_def, 'function'):
+                        # 直接使用 function，让 LangChain 自动推断 schema
+                        langchain_tool = StructuredTool.from_function(
+                            func=tool_def.function,
+                            name=tool_def.name,
+                            description=tool_def.description,
+                        )
+                        langchain_tools.append(langchain_tool)
+                        logger.debug(f"✓ 工具：{tool_name}")
+                    
+                    elif hasattr(tool_def, '_run'):
+                        # LangChain 工具对象
+                        langchain_tool = StructuredTool.from_function(
+                            func=tool_def._run,
+                            name=getattr(tool_def, 'name', tool_name),
+                            description=getattr(tool_def, 'description', ''),
+                        )
+                        langchain_tools.append(langchain_tool)
+                        logger.debug(f"✓ 工具：{tool_name}")
+                
+                except Exception as e:
+                    logger.debug(f"工具转换失败 {tool_name}: {e}")
+            
+            logger.info(f"✓ PyClaw 工具：{len(self.tool_registry.tools)} 个")
+        
         self.tools = langchain_tools
-        logger.info(f"✓ 工具初始化完成：{len(self.tools)} 个工具 (来自 tool_registry)")
-
+        
         # 创建带工具的 LLM
         if self.tools:
             self.llm_with_tools = self.llm.bind_tools(self.tools)
-
-        logger.info(f"工具初始化完成：{len(self.tools)} 个工具")
+        
+        logger.info(f"✓ 工具初始化完成：共 {len(self.tools)} 个工具")
 
     def _init_graph(self):
         """
         初始化 LangGraph StateGraph
-        
+
         构建 Agent 执行图:
             START → agent_node → should_continue
                                  ↓
@@ -467,10 +430,10 @@ class LangGraphAgent:
     def _agent_node(self, state: AgentState) -> Dict[str, Any]:
         """
         Agent 节点：调用 LLM 决定是否调用工具
-        
+
         参数:
             state: 当前状态 (包含消息历史)
-        
+
         返回:
             更新后的状态
         """
@@ -532,12 +495,12 @@ class LangGraphAgent:
     def _should_continue(self, state: AgentState) -> Literal["continue", "end"]:
         """
         判断是否继续执行 (调用工具还是结束)
-        
+
         检查最后一条消息是否有工具调用。
-        
+
         参数:
             state: 当前状态
-        
+
         返回:
             "continue" 或 "end"
         """
@@ -562,10 +525,10 @@ class LangGraphAgent:
     def _build_system_prompt(self, state: AgentState) -> str:
         """
         构建系统提示词 (注入工作区文件 + 技能说明)
-        
+
         参数:
             state: 当前状态
-        
+
         返回:
             系统提示词
         """
@@ -610,15 +573,15 @@ class LangGraphAgent:
     def _build_system_prompt_with_rag(self, state: AgentState) -> str:
         """
         构建系统提示词（注入 RAG 记忆 + 今日对话上下文）
-        
+
         采用混合策略：
         1. LangGraph MemorySaver - 当前会话历史（自动）
         2. 长期记忆.md - 用户偏好和背景
         3. 今日 JSON - 最近对话摘要（跨会话连续性）
-        
+
         参数:
             state: 当前状态
-        
+
         返回:
             系统提示词（包含完整上下文）
         """
@@ -746,12 +709,12 @@ class LangGraphAgent:
     ) -> Dict[str, Any]:
         """
         运行 Agent
-        
+
         参数:
             input_text: 用户输入
             session_key: 会话键 (用于隔离不同会话)
             stream: 是否流式输出
-        
+
         返回:
             执行结果
         """
@@ -952,12 +915,12 @@ class LangGraphAgent:
     ) -> Dict[str, Any]:
         """
         同步版本 run 方法（用于在多 Agent 系统中调用）
-        
+
         参数:
             input_text: 用户输入
             session_key: 会话键
             stream: 是否流式输出
-        
+
         返回:
             执行结果
         """
@@ -983,7 +946,7 @@ def create_langgraph_agent(
 ) -> LangGraphAgent:
     """
     创建 LangGraph Agent 的便捷函数
-    
+
     参数:
         model: 模型名称
         provider: Provider 名称
@@ -991,7 +954,7 @@ def create_langgraph_agent(
         system_prompt: 系统提示词
         max_iterations: 最大迭代次数
         workspace_path: 工作区路径
-    
+
     返回:
         LangGraphAgent 实例
     """
