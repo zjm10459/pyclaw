@@ -207,7 +207,7 @@ class GatewayRunner:
         try:
             from init_workspace import init_workspace
             
-            workspace_path = self.config.get("workspace", str(Path.cwd()))
+            workspace_path = Path(__file__).parent / "workspace"
             created = init_workspace(workspace_path)
             
             if created:
@@ -227,7 +227,8 @@ class GatewayRunner:
         try:
             from skills.skill_loader import SkillLoader
             
-            workspace = self.config.get("workspace", str(Path.cwd()))
+            # 工作区路径：项目根目录的 workspace 文件夹
+            workspace = Path(__file__).parent / "workspace"
             
             self.skill_loader = SkillLoader(workspace=workspace)
             skills = self.skill_loader.list_skills()
@@ -379,7 +380,7 @@ class GatewayRunner:
             )
             
             # 获取工作区路径
-            workspace_path = self.config.get("workspace", str(Path.cwd()))
+            workspace_path = Path(__file__).parent / "workspace"
             
             # 创建 Agent（注入技能加载器和 RAG 记忆）
             self.langgraph_agent = LangGraphAgent(
@@ -408,7 +409,7 @@ class GatewayRunner:
             from agents.multi_agent import MultiAgentCollaboration, AgentRole, DEFAULT_AGENTS
             
             # 获取工作区路径
-            workspace_path = self.config.get("workspace", str(Path.cwd()))
+            workspace_path = Path(__file__).parent / "workspace"
             
             # 从配置中读取要启用的 Agent 角色
             multi_agent_config = self.config.get("multi_agent", {})
@@ -491,7 +492,7 @@ class GatewayRunner:
             scheduler_config = self.config.get("heartbeat", {})
             
             # 获取工作区路径
-            workspace_path = self.config.get("workspace", str(Path.cwd()))
+            workspace_path = Path(__file__).parent / "workspace"
             
             # 创建调度器
             self.heartbeat_scheduler = create_heartbeat_scheduler(
@@ -519,7 +520,7 @@ class GatewayRunner:
             rag_config = self.config.get("rag", {})
             
             # 获取工作区路径
-            workspace_path = self.config.get("workspace", str(Path.cwd()))
+            workspace_path = Path(__file__).parent / "workspace"
             
             # 创建 RAG 记忆
             self.rag_memory = create_rag_memory(

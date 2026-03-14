@@ -175,9 +175,21 @@ class RAGMemory:
         # 路径
         self.workspace = Path(self.config.workspace).expanduser()
         self.workspace.mkdir(parents=True, exist_ok=True)
-        self.memory_dir = self.workspace / "memory"
+        
+        # 记忆文件路径（支持新结构和旧结构）
+        # 新结构：workspace/memory/
+        # 旧结构：workspace/
+        if (self.workspace / "memory").exists():
+            self.memory_dir = self.workspace / "memory"
+        else:
+            self.memory_dir = self.workspace
         self.memory_dir.mkdir(parents=True, exist_ok=True)
-        self.memory_md = self.workspace / "MEMORY.md"
+        
+        # 支持中文文件名
+        self.memory_md = self.workspace / "长期记忆.md"
+        if not self.memory_md.exists():
+            self.memory_md = self.workspace / "MEMORY.md"
+        
         self.vector_store_path = Path(self.config.vector_store_path).expanduser()
         self.vector_store_path.mkdir(parents=True, exist_ok=True)
         
