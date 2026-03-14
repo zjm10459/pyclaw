@@ -1,0 +1,47 @@
+{
+  "email": {
+    "smtp_server": "smtp.qq.com",
+    "smtp_port": 465,
+    "smtp_user": "your_email@qq.com",
+    "smtp_password": "YOUR_AUTH_CODE_HERE",
+    "use_ssl": true,
+    "use_tls": false,
+    "timeout": 30,
+    "retry_count": 3
+  },
+  "defaults": {
+    "from_name": "PyClaw 通知系统",
+    "encoding": "utf-8",
+    "reply_to": "noreply@pyclaw.com"
+  },
+  "templates": {
+    "document_notification": {
+      "subject": "文档发布通知：{doc_title}",
+      "body_html": true,
+      "body_template": "docs/templates/document_notification.html"
+    },
+    "weekly_report": {
+      "subject": "周报 - {week}",
+      "body_html": true,
+      "body_template": "docs/templates/weekly_report.html"
+    },
+    "alert": {
+      "subject": "【告警】{alert_title}",
+      "body_html": false,
+      "body_template": "docs/templates/alert.txt"
+    }
+  },
+  "recipients": {
+    "team": [
+      "member1@company.com",
+      "member2@company.com"
+    ],
+    "management": [
+      "manager@company.com"
+    ],
+    "all_staff": [
+      "staff1@company.com",
+      "staff2@company.com"
+    ]
+  }
+}

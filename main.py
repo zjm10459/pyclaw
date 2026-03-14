@@ -286,44 +286,43 @@ class GatewayRunner:
             except Exception as e:
                 logger.warning(f"注册 LangChain 工具失败：{e}")
             
+            # 注册 LangChain Web Fetch 工具（网页获取）
+            try:
+                from tools.langchain_web_tools import register_all as register_web_tools
+                web_count = register_web_tools(self.tool_registry)
+                if web_count > 0:
+                    logger.info(f"✓ LangChain Web 工具已注册：{web_count} 个")
+            except Exception as e:
+                logger.debug(f"LangChain Web 工具注册跳过：{e}")
+            
+            # 注册 Tavily Search 工具（AI 优化搜索）
+            try:
+                from tools.tavily_tools import register_all as register_tavily
+                tavily_count = register_tavily(self.tool_registry)
+                if tavily_count > 0:
+                    logger.info(f"✓ Tavily Search 工具已注册：{tavily_count} 个（API Key 已配置）")
+            except Exception as e:
+                logger.debug(f"Tavily Search 工具注册跳过：{e}")
+            
+            # 注册记忆工具（长期记忆保存）
+            try:
+                from tools.memory_tools import register_all as register_memory
+                memory_count = register_memory(self.tool_registry)
+                if memory_count > 0:
+                    logger.info(f"✓ 记忆工具已注册：{memory_count} 个（remember, search_memory）")
+            except Exception as e:
+                logger.debug(f"记忆工具注册跳过：{e}")
+            
             # 注册自定义工具（飞书、邮件、搜索等）
+            # 注意：OpenClaw 模式下，技能通过 exec 工具执行脚本，不再注册为专用工具
             try:
                 custom_tools.register_all(self.tool_registry)
-                logger.debug("✓ 自定义工具已注册")
+                logger.debug("✓ 自定义工具已注册（OpenClaw 模式：技能通过 exec 调用）")
             except Exception as e:
                 logger.warning(f"注册自定义工具失败：{e}")
             
-            # 注册技能工具（从 ~/.pyclaw/skills/ 加载的技能）
-            if self.skill_loader:
-                try:
-                    from skills.skill_loader import Skill
-                    skill_count = 0
-                    for skill in self.skill_loader.list_skills():
-                        # 检查技能是否有工具注册函数
-                        skill_tool_module = skill.path / "email_tools.py"
-                        if skill_tool_module.exists():
-                            # 导入技能工具模块
-                            import importlib.util
-                            spec = importlib.util.spec_from_file_location(
-                                f"skill_{skill.name}_tools",
-                                skill_tool_module
-                            )
-                            skill_tools_module = importlib.util.module_from_spec(spec)
-                            spec.loader.exec_module(skill_tools_module)
-                            
-                            # 调用 register_all 函数（如果存在）
-                            if hasattr(skill_tools_module, 'register_all'):
-                                skill_tools_module.register_all(self.tool_registry)
-                                skill_count += 1
-                                logger.debug(f"✓ 技能工具已注册：{skill.name}")
-                    
-                    if skill_count > 0:
-                        logger.info(f"✓ 技能工具已注册：{skill_count} 个技能")
-                except Exception as e:
-                    logger.warning(f"注册技能工具失败：{e}")
-            
             tools_count = len(self.tool_registry.tools) if hasattr(self.tool_registry, 'tools') else 0
-            logger.info(f"✓ 工具注册表已初始化：{tools_count} 个工具")
+            logger.info(f"✓ 工具注册表已初始化：{tools_count} 个工具（OpenClaw 模式）")
             
         except Exception as e:
             logger.warning(f"工具注册表初始化失败：{e}")

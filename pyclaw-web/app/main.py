@@ -335,11 +335,17 @@ async def chat(chat_msg: ChatMessage):
         # 更新会话模式
         session_manager.update_session(chat_msg.session_id, mode=chat_msg.mode)
         
+        logger.info(f"发送消息到 Gateway: {chat_msg.message[:50]}... (session={chat_msg.session_id})")
+        
         # 发送到 Gateway（Gateway 的 session manager 会自动维护历史）
-        response = await gateway_client.send_message(
-            session_id=chat_msg.session_id,
-            message=chat_msg.message,
-            mode=chat_msg.mode,
+        # 增加超时时间到 60 分钟（3600 秒），支持多 Agent 等长时间任务
+        response = await asyncio.wait_for(
+            gateway_client.send_message(
+                session_id=chat_msg.session_id,
+                message=chat_msg.message,
+                mode=chat_msg.mode,
+            ),
+            timeout=3600.0,  # 60 分钟超时
         )
         
         # 提取 AI 回复
@@ -347,7 +353,12 @@ async def chat(chat_msg: ChatMessage):
         if response.get("success"):
             ai_message = response.get("output", response.get("message", ""))
         else:
-            ai_message = f"错误：{response.get('error', '未知错误')}"
+            error_msg = response.get('error', '未知错误')
+            ai_message = f"错误：{error_msg}"
+            logger.warning(f"Gateway 返回失败：{error_msg}")
+        
+        logger.info(f"收到 Gateway 响应：{len(ai_message)} 字符，success={response.get('success', False)}")
+        logger.debug(f"完整响应：{response}")
         
         return ChatResponse(
             success=response.get("success", False),
@@ -357,6 +368,14 @@ async def chat(chat_msg: ChatMessage):
             metadata=response,
         )
     
+    except asyncio.TimeoutError:
+        logger.warning(f"请求超时（60 分钟）: {chat_msg.session_id}")
+        return ChatResponse(
+            success=False,
+            message="⏱️ 任务仍在后台执行中...\n\n**多 Agent 协作需要较长时间**（约 20-60 分钟）\n\n✅ 任务会继续执行\n✅ 完成后自动保存到会话\n✅ 请稍后刷新页面查看结果",
+            session_id=chat_msg.session_id,
+            mode=chat_msg.mode,
+        )
     except Exception as e:
         logger.exception(f"聊天失败：{e}")
         return ChatResponse(

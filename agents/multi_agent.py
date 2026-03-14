@@ -15,6 +15,7 @@
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Dict, Any, Optional, List, Literal
 from dataclasses import dataclass, field
 from enum import Enum
@@ -35,7 +36,6 @@ from typing import Annotated, TypedDict
 from agents.langgraph_agent import LangGraphAgent, LangGraphAgentConfig
 
 logger = logging.getLogger("pyclaw.multi_agent")
-
 
 # ============================================================================
 # Agent 角色定义
@@ -413,6 +413,7 @@ class MultiAgentCollaboration:
                 self._route_task,
                 {
                     **{f"expert_{role.value}": f"expert_{role.value}" for role in self.agent_definitions if role != AgentRole.SUPERVISOR},
+                    "supervisor": "supervisor",  # 添加：允许返回主管节点（继续分析）
                     "end": END,
                 }
             )
@@ -452,33 +453,115 @@ class MultiAgentCollaboration:
             subtasks = state.get("subtasks", [])
             agent_results = state.get("agent_results", {})
             
+            # ========== 构建完整上下文 ==========
+            
+            # 1. 可用专家角色
+            experts_info = []
+            for role, definition in self.agent_definitions.items():
+                if role != AgentRole.SUPERVISOR:
+                    experts_info.append(f"- {role.value}: {definition.description}")
+            experts_context = "\n".join(experts_info)
+            
+            # 2. 可用工具
+            tools_context = ""
+            if self.tool_registry and self.tool_registry.tools:
+                tools_list = []
+                for tool_name, tool_def in self.tool_registry.tools.items():
+                    tools_list.append(f"- {tool_name}: {tool_def.description[:100]}")
+                if tools_list:
+                    tools_context = "\n\n可用工具：\n" + "\n".join(tools_list[:10])  # 限制最多 10 个
+            
+            # 3. 可用技能（Skills）
+            skills_context = ""
+            if hasattr(supervisor, 'skill_loader') and supervisor.skill_loader:
+                try:
+                    skills_prompt = supervisor.skill_loader.get_skills_prompt(include_full_instructions=False)
+                    if skills_prompt:
+                        skills_context = "\n\n可用技能：\n" + skills_prompt[:1000]  # 限制长度
+                except Exception as e:
+                    logger.debug(f"获取技能信息失败：{e}")
+            
+            # 4. 用户记忆（如果支持）
+            memory_context = ""
+            if hasattr(supervisor, 'rag_memory') and supervisor.rag_memory:
+                try:
+                    memory_context = "\n\n用户记忆：\n" + supervisor.rag_memory.get_context(task, limit=3)
+                except Exception as e:
+                    logger.debug(f"获取用户记忆失败：{e}")
+            
+            # 5. 工作区上下文
+            workspace_context = ""
+            if self.workspace_path:
+                workspace_files = ["人格记忆.md", "USER.md", "长期记忆.md"]
+                for wf in workspace_files:
+                    wf_path = Path(self.workspace_path) / wf
+                    if wf_path.exists():
+                        content = wf_path.read_text(encoding='utf-8')[:500]  # 限制长度
+                        workspace_context += f"\n\n{wf}:\n{content}"
+            
+            # ========== 组合完整提示词 ==========
+            
             if not subtasks:
                 # 首次分析，分解任务
-                prompt = f"""请分析以下用户请求，并决定如何处理：
+                prompt = f"""你是多 Agent 协作系统的主管，负责任务分析和分解。
 
-用户请求：{task}
+## 可用资源
 
-你可以：
-1. 分解为子任务并分配给专家
-2. 直接回复（如果是简单问题）
+### 专家角色
+{experts_context}
 
-请只输出 JSON 格式，不要其他内容。"""
+### 可用工具
+{tools_context}
+
+### 可用技能
+{skills_context}
+
+### 用户记忆
+{memory_context}
+
+### 工作区信息
+{workspace_context}
+
+## 用户请求
+{task}
+
+## 你的任务
+1. 分析用户需求
+2. 决定是否需要分解任务
+3. 如果需要，分解为子任务并分配给合适的专家（可以调用工具或使用技能）
+4. 如果不需要，直接回复
+
+## 输出格式
+请只输出 JSON 格式，不要其他内容：
+
+如果需要分解任务：
+{{"action": "decompose", "subtasks": [{{"role": "researcher", "task": "..."}}, ...]}}
+
+如果直接回复：
+{{"action": "reply", "content": "..."}}"""
             else:
                 # 已有子任务，检查进度并汇总
                 completed = sum(1 for st in subtasks if st.get("completed", False))
                 total = len(subtasks)
                 
-                prompt = f"""任务执行进度：{completed}/{total}
+                prompt = f"""你是多 Agent 协作系统的主管，负责结果汇总。
 
-各 Agent 执行结果：
+## 任务进度
+{completed}/{total} 已完成
+
+## 各 Agent 执行结果
 {json.dumps(agent_results, ensure_ascii=False, indent=2)}
+{memory_context}
 
-请：
+## 你的任务
 1. 检查是否所有子任务都已完成
 2. 如果完成，汇总所有结果生成最终回复
 3. 如果未完成，继续分配剩余任务
 
-请只输出 JSON 格式。"""
+## 输出格式
+请只输出 JSON 格式：
+
+{{"action": "summarize", "content": "..."}} 或 {{"action": "continue"}}"""
             
             # 调用主管 Agent
             messages = [
@@ -696,7 +779,14 @@ class MultiAgentCollaboration:
             final_state = {}
             for step in result:
                 for node_name, node_output in step.items():
-                    final_state.update(node_output)
+                    # 检查 node_output 是否为 None 或字典
+                    if node_output is None:
+                        logger.debug(f"节点 {node_name} 返回 None，跳过")
+                        continue
+                    if isinstance(node_output, dict):
+                        final_state.update(node_output)
+                    else:
+                        logger.warning(f"节点 {node_name} 返回非字典类型：{type(node_output)}")
             
             output = final_state.get("final_result", "未生成结果")
             

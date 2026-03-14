@@ -97,3 +97,4 @@ docs/.doctrees/
 # *.h5
 # *.pkl
 # data/
+config.json

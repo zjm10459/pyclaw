@@ -1,0 +1,123 @@
+{
+  "workspace": "~/.pyclaw/workspace",
+  
+  "agents": {
+    "defaults": {
+      "model": "qwen3.5-plus",
+      "provider": "bailian",
+      "temperature": 0.7,
+      "max_tokens": 4096,
+      "max_iterations": 10,
+      "system_prompt": "你是一个有帮助的 AI 助手，使用中文回复。"
+    }
+  },
+  
+  "providers": {
+    "bailian": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "xxx"
+    }
+  },
+  
+  "memory": {
+    "path": "~/.pyclaw/memory"
+  },
+  
+  "sessions": {
+    "isolation": "per-channel-peer"
+  },
+  
+  "heartbeat": {
+    "enable_email": false,
+    "enable_calendar": false,
+    "enable_weather": false,
+    "default_interval_minutes": 30
+  },
+  
+  "rag": {
+    "enable_vector_search": true,
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "top_k": 5,
+    "embedding_model": "BAAI/bge-small-zh-v1.5",
+    "embedding_model_path": null,
+    "offline_mode": false,
+    "vector_store": "memory",
+    "retrieval_method": "hybrid",
+    "hybrid_alpha": 0.5,
+    "use_mmr": true,
+    "mmr_lambda": 0.5,
+    "use_rerank": false,
+    "rerank_model": "BAAI/bge-reranker-base"
+  },
+  
+  "multi_agent": {
+    "_comment": "多 Agent 系统配置 - 高配版（最强性能）",
+    "enabled_roles": "supervisor,researcher,coder,writer,analyst,executor",
+    
+    "_comment_models": "每个角色使用最适合的模型，发挥最大性能（全部使用阿里云百炼平台）",
+    "agents": {
+      "supervisor": {
+        "model": "qwen3-max-2026-01-23",
+        "provider": "bailian",
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "max_iterations": 5,
+        "_comment": "最强推理模型，适合复杂任务分解和决策"
+      },
+      "researcher": {
+        "model": "kimi-k2.5",
+        "provider": "bailian",
+        "temperature": 0.5,
+        "max_tokens": 4096,
+        "_comment": "长文本处理能力强，适合大量信息收集和分析"
+      },
+      "coder": {
+        "model": "qwen3-coder-plus",
+        "provider": "bailian",
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "_comment": "专用代码模型，代码编写和审查能力最强"
+      },
+      "writer": {
+        "model": "minimax-m2.5",
+        "provider": "bailian",
+        "temperature": 0.8,
+        "max_tokens": 4096,
+        "_comment": "创意写作能力强，文风多样，适合文案创作"
+      },
+      "analyst": {
+        "model": "glm-5",
+        "provider": "bailian",
+        "temperature": 0.5,
+        "max_tokens": 4096,
+        "_comment": "逻辑推理能力强，数据分析和洞察提取准确"
+      },
+      "executor": {
+        "model": "qwen3.5-plus",
+        "provider": "bailian",
+        "temperature": 0.7,
+        "max_tokens": 2048,
+        "_comment": "快速响应，执行简单任务，成本效益高"
+      }
+    }
+  },
+  
+  "channels": {
+    "feishu": {
+      "enabled": false,
+      "app_id": "",
+      "app_secret": "",
+      "verification_token": "",
+      "encrypt_key": "",
+      "host": "0.0.0.0",
+      "port": 18791
+    }
+  },
+  
+  "server": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "auth_token": ""
+  }
+}

@@ -357,11 +357,51 @@ class LangGraphAgent:
                 # 检查是否是 ToolDefinition 对象
                 if hasattr(tool_def, 'function'):
                     # ToolDefinition 对象，使用 function 属性
+                    # 从 parameters 创建 Pydantic schema
+                    args_schema = None
+                    if hasattr(tool_def, 'parameters') and tool_def.parameters:
+                        try:
+                            from pydantic import BaseModel, create_model
+                            
+                            # 从 JSON Schema 创建 Pydantic model
+                            params = tool_def.parameters.get('properties', {})
+                            required = tool_def.parameters.get('required', [])
+                            
+                            # 构建字段定义
+                            field_definitions = {}
+                            for param_name, param_info in params.items():
+                                param_type = param_info.get('type', 'str')
+                                param_desc = param_info.get('description', '')
+                                default = ... if param_name in required else None
+                                
+                                # 类型映射
+                                type_map = {
+                                    'string': str,
+                                    'integer': int,
+                                    'number': float,
+                                    'boolean': bool,
+                                    'array': list,
+                                    'object': dict,
+                                }
+                                python_type = type_map.get(param_type, str)
+                                
+                                field_definitions[param_name] = (python_type, default)
+                            
+                            # 创建动态 model
+                            if field_definitions:
+                                args_schema = create_model(
+                                    f"{tool_def.name.title()}Schema",
+                                    **field_definitions,
+                                    __doc__=tool_def.description,
+                                )
+                        except Exception as e:
+                            logger.debug(f"创建 args_schema 失败 {tool_name}: {e}")
+                    
                     langchain_tool = StructuredTool(
                         name=tool_def.name,
                         description=tool_def.description,
                         func=tool_def.function,
-                        args_schema=getattr(tool_def, 'schema', None),
+                        args_schema=args_schema,
                     )
                 elif hasattr(tool_def, '_run'):
                     # LangChain 工具对象（如 RequestsGetTool, ReadFileTool 等）
@@ -583,42 +623,84 @@ class LangGraphAgent:
     
     def _build_system_prompt_with_rag(self, state: AgentState) -> str:
         """
-        构建系统提示词（注入 RAG 记忆）
+        构建系统提示词（注入 RAG 记忆 + 今日对话上下文）
+        
+        采用混合策略：
+        1. LangGraph MemorySaver - 当前会话历史（自动）
+        2. 长期记忆.md - 用户偏好和背景
+        3. 今日 JSON - 最近对话摘要（跨会话连续性）
         
         参数:
             state: 当前状态
         
         返回:
-            系统提示词（包含 RAG 检索的相关记忆）
+            系统提示词（包含完整上下文）
         """
-        # 基础系统提示词
+        # 1. 基础系统提示词
         base_prompt = self._build_system_prompt(state)
         
-        # RAG 记忆检索
-        if self.rag_memory:
-            try:
-                # 从用户消息中提取查询关键词
-                user_message = ""
-                for msg in state["messages"]:
-                    if hasattr(msg, 'role') and msg.role == "user":
-                        user_message = msg.content
-                        break
+        # 2. 长期记忆（全部加载）
+        try:
+            from tools.memory_tools import get_memory_file
+            from pathlib import Path
+            
+            memory_file = get_memory_file()
+            if memory_file.exists():
+                content = memory_file.read_text(encoding="utf-8")
                 
-                if user_message:
-                    # 检索相关记忆
-                    context = self.rag_memory.get_context(
-                        query=user_message,
-                        max_tokens=1000,
-                        top_k=5,
-                    )
+                # 提取所有记忆内容（去掉标题和说明）
+                lines = content.split("\n")
+                memory_entries = []
+                in_entry = False
+                
+                for line in lines:
+                    if line.startswith("## 📅") or line.startswith("### "):
+                        memory_entries.append(line)
+                        in_entry = True
+                    elif in_entry and line.strip() and not line.startswith("---"):
+                        memory_entries.append(line)
+                
+                if memory_entries:
+                    long_term_memory = "\n".join(memory_entries[:50])  # 限制最多 50 行
+                    base_prompt += f"\n\n## 🧠 长期记忆（全部）\n\n{long_term_memory}"
+                    logger.debug(f"注入长期记忆：{len(memory_entries)} 条")
+        
+        except Exception as e:
+            logger.debug(f"加载长期记忆失败：{e}")
+        
+        # 3. 今日对话上下文（跨会话连续性）
+        try:
+            from tools.chat_recorder import get_today_records
+            
+            # 获取今日最近 2 次对话
+            records_result = get_today_records(limit=2)
+            
+            if records_result.get("success") and records_result.get("records"):
+                records = records_result["records"]
+                
+                # 生成今日对话摘要
+                today_context = "\n\n## 📅 今日对话摘要\n\n"
+                today_context += "以下是用户今天的最近对话，帮助保持上下文连续性：\n\n"
+                
+                for i, record in enumerate(records, 1):
+                    timestamp = record.get("timestamp", "")
+                    summary = record.get("summary", "")
+                    msg_count = record.get("message_count", 0)
                     
-                    # 注入 RAG 上下文
-                    if context and "没有找到相关记忆" not in context:
-                        rag_section = "\n\n## 相关记忆 (RAG 检索)\n\n" + context
-                        return base_prompt + rag_section
+                    today_context += f"{i}. **{timestamp}** - {summary} ({msg_count}条消息)\n"
+                    
+                    # 提取关键信息（用户最后的问题）
+                    if record.get("messages"):
+                        last_msg = record["messages"][-1]
+                        if last_msg.get("role") in ["human", "user"]:
+                            today_context += f"   → 用户：{last_msg['content'][:100]}...\n"
                 
-            except Exception as e:
-                logger.warning(f"RAG 记忆检索失败：{e}")
+                today_context += "\n如果用户提到'刚才'、'之前'等词，参考以上对话。\n"
+                base_prompt += today_context
+                logger.debug(f"注入今日对话上下文：{len(records)} 条记录")
+        
+        except Exception as e:
+            logger.debug(f"获取今日对话失败：{e}")
         
         return base_prompt
         
@@ -750,6 +832,113 @@ class LangGraphAgent:
                 tool_calls_count += len(msg.tool_calls)
         
         logger.info(f"Agent 执行完成：{len(output)} 字符，工具调用 {tool_calls_count} 次")
+        
+        # ========== 自动保存聊天记录 ==========
+        try:
+            from tools.chat_recorder import save_chat_record
+            
+            # 转换消息格式
+            chat_messages = []
+            first_user_msg = ""
+            last_user_msg = ""
+            
+            for msg in all_messages:
+                msg_dict = {
+                    "role": msg.type if hasattr(msg, 'type') else "unknown",
+                    "content": msg.content if hasattr(msg, 'content') else str(msg),
+                }
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    msg_dict["tool_calls"] = msg.tool_calls
+                chat_messages.append(msg_dict)
+                
+                # 提取用户消息用于摘要
+                if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
+                    if not first_user_msg:
+                        first_user_msg = msg.content[:100]
+                    last_user_msg = msg.content[:100]
+            
+            # 生成详细摘要（包含主题、工具、关键信息）
+            user_msgs = [m for m in all_messages if isinstance(m, HumanMessage)]
+            ai_msgs = [m for m in all_messages if isinstance(m, AIMessage)]
+            tool_msgs = [m for m in all_messages if hasattr(m, 'type') and m.type == "tool"]
+            
+            # 1. 提取用户主要意图
+            user_intent = ""
+            if user_msgs:
+                user_intent = user_msgs[0].content[:80] if hasattr(user_msgs[0], 'content') else ""
+            
+            # 2. 检测工具调用及结果
+            tool_info = ""
+            tool_results = []
+            for msg in ai_msgs:
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        tool_name = tc.get('name', 'unknown')
+                        tool_args = tc.get('args', {})
+                        tool_info = f"使用 {tool_name}"
+                        
+                        # 提取工具参数作为关键词
+                        if 'query' in tool_args:
+                            tool_results.append(f"搜索：{str(tool_args['query'])[:50]}")
+                        elif 'url' in tool_args:
+                            tool_results.append(f"访问：{tool_args['url'][:50]}")
+            
+            # 3. 提取工具返回结果
+            tool_output_summary = ""
+            for msg in tool_msgs:
+                if hasattr(msg, 'content') and msg.content:
+                    content = msg.content[:100]
+                    # 提取关键信息
+                    if "搜索" in tool_info.lower() or "search" in tool_info.lower():
+                        tool_output_summary = f"找到相关信息"
+                    elif len(content) > 50:
+                        tool_output_summary = f"获取内容 ({len(content)} 字)"
+                    else:
+                        tool_output_summary = f"获取结果"
+            
+            # 4. 提取 AI 最终回复的关键信息
+            ai_summary = ""
+            if ai_msgs:
+                last_ai_msg = ai_msgs[-1]
+                if hasattr(last_ai_msg, 'content') and last_ai_msg.content:
+                    content = last_ai_msg.content
+                    # 提取第一句有意义的话
+                    for sentence in content.split('。'):
+                        if len(sentence.strip()) > 10:
+                            ai_summary = sentence.strip()[:60]
+                            break
+            
+            # 5. 组合详细摘要
+            summary_parts = []
+            if user_intent:
+                summary_parts.append(f"用户：{user_intent}")
+            if tool_info:
+                summary_parts.append(tool_info)
+            if tool_results:
+                summary_parts.extend(tool_results)
+            if tool_output_summary:
+                summary_parts.append(tool_output_summary)
+            if ai_summary:
+                summary_parts.append(f"回复：{ai_summary}")
+            
+            # 生成最终摘要
+            if summary_parts:
+                summary = " | ".join(summary_parts)
+            else:
+                summary = f"对话记录：{len(all_messages)} 条消息"
+            
+            # 限制摘要长度
+            if len(summary) > 300:
+                summary = summary[:297] + "..."
+            
+            # 保存记录
+            save_chat_record(
+                messages=chat_messages,
+                session_key=session_key,
+                summary=summary,
+            )
+        except Exception as e:
+            logger.debug(f"保存聊天记录失败：{e}")
         
         return {
             "success": True,
