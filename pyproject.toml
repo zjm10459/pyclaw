@@ -59,11 +59,10 @@ dependencies = [
     "langchain-anthropic>=0.2.0",
     # LLM Provider SDK
     "openai>=1.50.0",
-    # RAG 向量嵌入（中文优化）
-    "sentence-transformers>=2.2.0",
     "anthropic>=0.40.0",
-    # 向量记忆
+    # RAG 向量嵌入（中文优化，可选）
     "sentence-transformers>=2.2.0",
+    # 向量记忆
     "numpy>=1.24.0",
     # 网页工具
     "beautifulsoup4>=4.12.0",
