@@ -75,7 +75,7 @@ def get_api_key() -> Optional[str]:
     
     # 3. 从 PyClaw 配置读取（使用 ConfigManager）
     try:
-        from ..pyclaw.config import get_config
+        from config.config import get_config
         api_key = get_config("tavily", "api_key")
         if api_key:
             logger.debug("从 ConfigManager 获取 Tavily API Key")

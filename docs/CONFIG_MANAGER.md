@@ -33,7 +33,7 @@ PyClaw 配置管理系统提供统一的配置加载、缓存和管理功能。
 ### 1. 使用便捷函数（推荐）
 
 ```python
-from pyclaw.config import get_config, set_config
+from config.config import get_config, set_config
 
 # 获取配置
 app_config = get_config("app")
@@ -48,7 +48,7 @@ set_config("app", "debug", True)
 ### 2. 使用 ConfigManager 类
 
 ```python
-from pyclaw.config import ConfigManager
+from config.config import ConfigManager
 
 # 获取单例实例
 config = ConfigManager.get_instance()
@@ -67,7 +67,7 @@ config.save("app")
 ### 3. 模块内使用（带本地缓存）
 
 ```python
-from pyclaw.config import get_module_config, invalidate_module_cache
+from config.config import get_module_config, invalidate_module_cache
 
 # 获取模块配置（带本地缓存）
 module_config = get_module_config("my_module")
@@ -169,9 +169,10 @@ python pyclaw/config.py migrate
 
 ```python
 # 在模块级别加载一次
-from pyclaw.config import get_module_config
+from config.config import get_module_config
 
 MODULE_CONFIG = get_module_config("my_module")
+
 
 def my_function():
     # 直接使用缓存的配置
@@ -181,7 +182,8 @@ def my_function():
 ### 2. 配置变更时使缓存失效
 
 ```python
-from pyclaw.config import set_config, invalidate_module_cache
+from config.config import set_config, invalidate_module_cache
+
 
 def update_setting(key, value):
     set_config("my_module", key, value)
@@ -191,10 +193,12 @@ def update_setting(key, value):
 ### 3. 使用配置回调
 
 ```python
-from pyclaw.config import ConfigManager
+from config.config import ConfigManager
+
 
 def on_config_change(module, key, value):
     print(f"配置变更：{module}.{key} = {value}")
+
 
 config = ConfigManager.get_instance()
 config.register_callback("app", on_config_change)
@@ -203,7 +207,7 @@ config.register_callback("app", on_config_change)
 ### 4. 批量操作时延迟保存
 
 ```python
-from pyclaw.config import ConfigManager
+from config.config import ConfigManager
 
 config = ConfigManager.get_instance()
 
@@ -271,7 +275,7 @@ set_config("module", "key", "value")  # 默认 save=True
 可能是缓存问题，尝试重新加载：
 
 ```python
-from pyclaw.config import ConfigManager
+from config.config import ConfigManager
 
 config = ConfigManager.get_instance()
 config.reload("my_module")  # 从文件重新加载
@@ -280,7 +284,7 @@ config.reload("my_module")  # 从文件重新加载
 ### 配置文件位置
 
 ```python
-from pyclaw.config import ConfigManager
+from config.config import ConfigManager
 
 config = ConfigManager.get_instance()
 path = config.get_config_path("my_module")

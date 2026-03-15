@@ -20,8 +20,9 @@
 - ✅ 持久化 - 自动保存到 JSON 文件
 
 **使用方式：**
+
 ```python
-from pyclaw.config import get_config, set_config
+from config.config import get_config, set_config
 
 # 获取配置（自动缓存）
 app_config = get_config("app")
@@ -118,7 +119,7 @@ config_file = "~/.pyclaw/config.json"
 ### 重构后
 
 ```python
-from pyclaw.config import get_config, set_config
+from config.config import get_config, set_config
 
 # 获取配置（自动缓存）
 config = get_config("module_name")
@@ -265,7 +266,7 @@ python3 main_feishu.py --verbose
 ## 📚 相关文档
 
 - [配置管理器使用指南](./docs/CONFIG_MANAGER.md)
-- [配置管理器源码](./pyclaw/config.py)
+- [配置管理器源码](config/config.py)
 
 ## 💡 使用建议
 
@@ -282,9 +283,10 @@ python3 main_feishu.py --verbose
 - `tools/tavily_tools.py`
 
 模式：
+
 ```python
 # 1. 导入配置管理器
-from pyclaw.config import get_config
+from config.config import get_config
 
 # 2. 替换旧的配置加载代码
 old_config = json.load(open("config.json"))
