@@ -721,12 +721,12 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     # 配置查找顺序
     config_paths = [
         config_path,
+        Path.cwd() / "workspace" / "config.json",
         Path.home() / ".pyclaw" / "config.json",
         Path.home() / ".pyclaw" / "config.json5",
         Path("config.json"),
         Path("config.json5"),
     ]
-    
     for path in config_paths:
         if not path:
             continue

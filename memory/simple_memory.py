@@ -70,7 +70,7 @@ class SimpleMemory:
             storage_path: 存储路径（默认 ~/.pyclaw/memory）
         """
         self.storage_path = Path(
-            storage_path or Path.home() / ".pyclaw" / "memory"
+            storage_path or Path.cwd() / "workspace" / "memory"
         )
         self.storage_path.mkdir(parents=True, exist_ok=True)
         

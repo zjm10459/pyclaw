@@ -256,7 +256,7 @@ def config_init(path):
     """
     from pathlib import Path
     
-    config_path = Path(path) if path else Path.home() / ".pyclaw" / "config.json"
+    config_path = Path(path) if path else Path.cwd() / "workspace" / "config.json"
     
     if config_path.exists():
         click.echo(f"⚠️  配置文件已存在：{config_path}")

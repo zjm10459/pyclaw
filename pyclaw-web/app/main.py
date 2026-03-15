@@ -288,9 +288,9 @@ class PyClawGatewayClient:
                     "session_id": session_id,
                 }
         
-        # 等待响应
+        # 等待响应（60 分钟超时，支持长任务）
         try:
-            response = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=120.0))
+            response = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=3600.0))
             # 解析响应
             if response.get("type") == "res":
                 if response.get("ok"):

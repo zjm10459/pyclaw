@@ -39,7 +39,7 @@ from .advanced_retrieval import (
 @dataclass
 class RAGMemoryConfig:
     """RAG 配置"""
-    workspace: str = "~/.pyclaw/workspace"
+    workspace: str = Path.cwd() / "workspace"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chunk_size: int = 500
     chunk_overlap: int = 50
@@ -54,7 +54,7 @@ class RAGMemoryConfig:
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     
     enable_vector_search: bool = True
-    vector_store_path: str = "~/.pyclaw/vector_store"
+    vector_store_path: str = Path.cwd() / "workspace" / "vector_store"
 
 
 class TextChunker:
@@ -716,7 +716,7 @@ def create_rag_memory(
 ) -> RAGMemory:
     """创建 RAG 记忆的便捷函数"""
     config = RAGMemoryConfig(
-        workspace=workspace_path or str(Path.home() / ".pyclaw" / "workspace"),
+        workspace=workspace_path or str(Path.cwd() / "workspace"),
         enable_vector_search=enable_vector_search,
         chunk_size=chunk_size,
         top_k=top_k,

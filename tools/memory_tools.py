@@ -27,7 +27,7 @@ logger = logging.getLogger("pyclaw.memory_tools")
 def get_memory_file() -> Path:
     """获取长期记忆文件路径"""
     # 优先使用 PyClaw 项目工作区
-    pyclaw_workspace = Path.home() / ".openclaw" / "workspace" / "pyclaw"
+    pyclaw_workspace = Path.cwd() / "workspace"
     memory_file = pyclaw_workspace / "长期记忆.md"
     
     # 如果不存在，尝试 ~/.pyclaw/workspace
@@ -35,17 +35,13 @@ def get_memory_file() -> Path:
         workspace = Path.home() / ".pyclaw" / "workspace"
         memory_file = workspace / "长期记忆.md"
     
-    # 最后尝试 OpenClaw 工作区
-    if not memory_file.exists():
-        memory_file = Path.home() / ".openclaw" / "workspace" / "长期记忆.md"
-    
     return memory_file
 
 
 def get_daily_memory_file() -> Path:
     """获取今日记忆文件路径"""
     # PyClaw 项目根目录的 memory_chat 目录
-    memory_dir = Path.home() / ".openclaw" / "workspace" / "pyclaw" / "memory_chat"
+    memory_dir = Path.cwd() / "workspace" / "memory"
     
     # 如果不存在，尝试旧路径
     if not memory_dir.exists():

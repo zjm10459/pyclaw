@@ -102,8 +102,8 @@ class HeartbeatScheduler:
             workspace_path: 工作区路径（默认 ~/.pyclaw/workspace）
             state_path: 状态文件路径（默认 ~/.pyclaw/scheduler/heartbeat-state.json）
         """
-        self.workspace_path = Path(workspace_path or Path.home() / ".pyclaw" / "workspace")
-        self.state_path = Path(state_path or Path.home() / ".pyclaw" / "scheduler" / "heartbeat-state.json")
+        self.workspace_path = Path.cwd() / "workspace"
+        self.state_path = Path(self.workspace_path / "scheduler" / "heartbeat-state.json")
         
         # 确保状态目录存在
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     
     # 创建调度器
     scheduler = create_heartbeat_scheduler(
-        workspace_path=str(Path.home() / ".pyclaw" / "workspace"),
+        workspace_path=str(Path.cwd() / "workspace"),
         enable_email=True,
         enable_calendar=True,
         enable_weather=True,

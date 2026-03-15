@@ -131,7 +131,7 @@ class AuthManager:
         
         # 配对存储
         self.pairing_store_path = Path(
-            pairing_store_path or Path.home() / ".pyclaw" / "paired-devices.json"
+            pairing_store_path or Path.cwd() / "workspace" / "paired-devices.json"
         )
         
         # 本地设备自动配对

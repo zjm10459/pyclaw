@@ -304,7 +304,7 @@ class LangGraphAgent:
 
         # 可能的配置文件路径
         config_paths = [
-            Path.cwd() / "config.json",
+            Path.cwd() / "workspace" / "config.json",
             Path.home() / ".pyclaw" / "config.json",
             Path(__file__).parent.parent / "config.json",
         ]
@@ -703,7 +703,7 @@ class LangGraphAgent:
         workspace_files = {}
 
         if not self.workspace_path:
-            workspace_path = Path.home() / ".pyclaw" / "workspace"
+            workspace_path = Path.cwd() / "workspace"
         else:
             workspace_path = Path(self.workspace_path)
 

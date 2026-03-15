@@ -148,6 +148,7 @@ class ConfigLoader:
     
     # 默认配置路径查找顺序
     DEFAULT_PATHS = [
+        Path.cwd() / "workspace" / "config.json",
         Path.home() / ".pyclaw" / "config.json",
         Path.home() / ".pyclaw" / "config.json5",
         Path("./pyclaw.json"),

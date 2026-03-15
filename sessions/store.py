@@ -97,7 +97,7 @@ class SessionStore:
             store_dir: 存储目录（默认 ~/.pyclaw/sessions）
         """
         self.store_dir = Path(
-            store_dir or Path.home() / ".pyclaw" / "sessions"
+            store_dir or Path.cwd() / "workspace" / "sessions"
         )
         self.index_path = self.store_dir / "sessions.json"
         

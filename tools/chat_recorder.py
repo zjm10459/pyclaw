@@ -119,7 +119,7 @@ def generate_detailed_summary(messages: List[Dict[str, Any]]) -> str:
 def get_chat_record_dir() -> Path:
     """获取聊天记录目录"""
     # PyClaw 项目根目录的 memory_chat 目录
-    memory_dir = Path.home() / ".openclaw" / "workspace" / "pyclaw" / "memory_chat"
+    memory_dir = Path.cwd() / "workspace" /"memory"
     
     # 如果不存在，尝试其他路径
     if not memory_dir.exists():

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "skills": {
+    "nano-banana-pros": {
+      "version": "1.0.0",
+      "installedAt": 1773500741535
+    },
+    "duckduckgo-search": {
+      "version": "1.0.0",
+      "installedAt": 1773577664829
+    }
+  }
+}
