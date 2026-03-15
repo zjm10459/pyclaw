@@ -225,7 +225,7 @@ class GatewayRunner:
         
         # 1. 初始化技能加载器
         try:
-            from workspace.skills.skill_loader import SkillLoader
+            from skill.skill_loader import SkillLoader
             
             # 工作区路径：项目根目录的 workspace 文件夹
             workspace = Path(__file__).parent / "workspace"
