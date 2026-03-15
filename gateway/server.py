@@ -26,7 +26,7 @@ PyClaw 的核心服务器实现。
 
 使用示例：
     from gateway import GatewayServer
-    from skills import get_skill_loader
+    from workspace.skills import get_skill_loader
     from memory import get_memory
     
     skill_loader = get_skill_loader()
