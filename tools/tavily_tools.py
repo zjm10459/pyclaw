@@ -14,7 +14,7 @@ Tavily 是专为 AI Agent 设计的搜索引擎，返回简洁、相关的结果
 
 API Key 配置：
 - 环境变量：TAVILY_API_KEY
-- 或从配置文件加载
+- 或从配置文件加载（使用 ConfigManager）
 """
 
 import logging
@@ -73,18 +73,15 @@ def get_api_key() -> Optional[str]:
         except Exception as e:
             logger.debug(f"从 TOOLS.md 读取 API Key 失败：{e}")
     
-    # 3. 从 PyClaw 配置读取
-    config_file = os.path.expanduser("~/.pyclaw/config.json")
-    if os.path.exists(config_file):
-        try:
-            import json
-            config = json.loads(open(config_file, "r", encoding="utf-8").read())
-            api_key = config.get("tavily", {}).get("api_key")
-            if api_key:
-                logger.debug("从配置文件获取 Tavily API Key")
-                return api_key
-        except Exception as e:
-            logger.debug(f"从配置文件读取 API Key 失败：{e}")
+    # 3. 从 PyClaw 配置读取（使用 ConfigManager）
+    try:
+        from ..pyclaw.config import get_config
+        api_key = get_config("tavily", "api_key")
+        if api_key:
+            logger.debug("从 ConfigManager 获取 Tavily API Key")
+            return api_key
+    except Exception as e:
+        logger.debug(f"从 ConfigManager 读取 API Key 失败：{e}")
     
     logger.warning("未找到 Tavily API Key")
     return None

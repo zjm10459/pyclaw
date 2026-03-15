@@ -16,8 +16,8 @@ import argparse
 import logging
 import signal
 import sys
-import json
 from pathlib import Path
+from .config import get_config, get_global_config
 
 
 def parse_args():
@@ -140,35 +140,21 @@ class PyClawRunner:
     def load_config(self) -> dict:
         """
         加载配置文件
+        
+        使用统一的 ConfigManager，自动缓存和迁移旧配置
         """
-        config_paths = [
-            self.config_path,
-            "~/.pyclaw/config.json",
-            "~/.pyclaw/config.json5",
-            "config.json",
-        ]
+        # 初始化全局配置（会自动迁移旧配置）
+        config_manager = get_global_config()
         
-        for path in config_paths:
-            if not path:
-                continue
-            
-            p = Path(path).expanduser()
-            if p.exists():
-                try:
-                    with open(p, 'r', encoding='utf-8') as f:
-                        if p.suffix == '.json5':
-                            import json5
-                            config = json5.load(f)
-                        else:
-                            config = json.load(f)
-                    
-                    logging.info(f"✓ 已加载配置：{p}")
-                    return config
-                except Exception as e:
-                    logging.error(f"加载配置失败：{e}")
+        # 获取主配置
+        main_config = config_manager.get("main")
         
-        logging.warning("未找到配置文件，使用默认配置")
-        return {}
+        if main_config:
+            logging.info("✓ 已加载配置（使用 ConfigManager）")
+        else:
+            logging.info("ℹ 使用默认配置（未找到配置文件）")
+        
+        return main_config
     
     async def start(self):
         """
